@@ -1,42 +1,39 @@
-/** لایه داده بازار: کالکشن‌ها، فید فروش/اجاره، اطلاعات آیتم — با فال‌بک هوشمند */
-import { maFetch, isPaidRequired, isTokenInvalid, TOKEN_INVALID_FA } from './marketapp';
+/** لایه داده بازار: کالکشن‌ها، فید اجاره (رایگان)، لیستینگ محلی، اطلاعات آیتم */
+import { maFetch, isTokenInvalid, TOKEN_INVALID_FA } from './marketapp';
 import { kvGet, kvSet } from './kv';
 import { db } from './db';
 import { fromNano } from './format';
 import type { NFTItem, RentItem, Collection } from './types';
 
 export type Section = 'usernames' | 'numbers' | 'gifts';
-export type FeedMode = 'sale' | 'rent';
 
 export type FeedItem = {
   key: string;
   source: 'marketapp' | 'local';
   kind: Section;
-  address?: string; // اگر local باشد undefined
+  address?: string;
   name: string;
   sub: string;
   num: number | null;
   collectionSlug?: string | null;
   collectionAddress?: string | null;
   attrs: { trait_type: string; value: string | number }[];
-  mode: FeedMode;
-  priceTon: number | null; // فروش: کل مبلغ — اجاره: مبلغ هر روز
-  minBidTon?: number | null;
-  maxBidTon?: number | null;
+  mode: 'rent' | 'sale'; // مارکت‌اپ: فقط اجاره — لیستینگ محلی: اجاره یا خرید مستقیم از سایت
+  priceTon: number | null; // اجاره: مبلغ هر روز — خرید محلی: کل مبلغ
   endTimeSec?: number | null;
   minDurationSec?: number | null;
   maxDurationSec?: number | null;
   owner?: string | null;
-  sellableDuringRent?: boolean;
   listedAt?: number | null;
 };
 
 export type FeedResult = {
   items: FeedItem[];
   cursor: string | null;
-  paid: boolean; // فید فروش نیازمند پلن API است؟
   notice?: string;
 };
+
+const KIND_DB: Record<Section, string> = { usernames: 'username', numbers: 'number', gifts: 'gift' };
 
 // ---------------- کالکشن‌ها ----------------
 export async function getCollections(kind: 'gifts' | 'all', force = false): Promise<Collection[]> {
@@ -60,15 +57,15 @@ export async function getSpecialCollections(kind: 'usernames' | 'numbers'): Prom
   return (all || []).filter((c) => (c.name || '').toLowerCase().includes(q));
 }
 
-// ---------------- فید اجاره (رایگان) ----------------
+// ---------------- فید اجاره (endpoint رایگان مارکت‌اپ) ----------------
 export async function getRentFeed(
   section: Section,
   params: { cursor?: string; limit?: number; collection_address?: string; model?: string; backdrop?: string; symbol?: string; sort_by?: string } = {},
 ): Promise<FeedResult> {
   const r = await maFetch<{ cursor: string | null; items: RentItem[] }>(`/v1/rent/${section}/`, { query: params as Record<string, string | number | undefined | null> });
   if (r.status !== 200 || !r.body) {
-    if (isTokenInvalid(r.body)) return { items: [], cursor: null, paid: false, notice: TOKEN_INVALID_FA };
-    return { items: [], cursor: null, paid: isPaidRequired(r.status, r.body), notice: 'فید اجاره در دسترس نیست' };
+    if (isTokenInvalid(r.body)) return { items: [], cursor: null, notice: TOKEN_INVALID_FA };
+    return { items: [], cursor: null, notice: 'فید اجاره در دسترس نیست' };
   }
   const items: FeedItem[] = (r.body.items || []).map((it) => ({
     key: it.nft_address,
@@ -84,113 +81,104 @@ export async function getRentFeed(
     minDurationSec: it.min_duration,
     maxDurationSec: it.max_duration,
     owner: it.owner,
-    sellableDuringRent: it.is_sellable_during_rent,
     listedAt: it.listed_at,
   }));
-  return { items, cursor: r.body.cursor || null, paid: false };
+  // ذخیره در RentCache — تا صفحه آیتم و «اجاره کردن» بدون endpoint پولی هم کار کنند
+  void saveRentCache(section, r.body.items || []);
+  return { items, cursor: r.body.cursor || null };
 }
 
-// ---------------- فید فروش (نیازمند پلن API؛ خطای 402 → فال‌بک) ----------------
-export async function getSaleFeed(
-  section: Section,
-  params: { cursor?: string; limit?: number; collection_address?: string; sort_by?: string } = {},
-): Promise<FeedResult> {
-  let res: { status: number; body: { cursor?: string | null; items?: NFTItem[] } | null };
-  if (section === 'gifts') {
-    res = await maFetch('/v1/gifts/onsale/', { query: params as Record<string, string | number | undefined | null> });
-  } else {
-    const cols = await getSpecialCollections(section);
-    const addr = params.collection_address || cols[0]?.address;
-    if (!addr) {
-      // علت را شفاف بگویید: توکن نامعتبر یا کالکشن ثبت‌نشده
-      const probe = await maFetch('/v1/collections/');
-      if (isTokenInvalid(probe.body)) return { items: [], cursor: null, paid: false, notice: TOKEN_INVALID_FA };
-      return { items: [], cursor: null, paid: false, notice: 'کالکشن یوزرنیم/شماره در مارکت‌اپ یافت نشد' };
+async function saveRentCache(section: Section, items: RentItem[]) {
+  try {
+    for (const it of items) {
+      await db.rentCache.upsert({
+        where: { nftAddress: it.nft_address },
+        update: {
+          kind: section, name: it.nft_name, pricePerDay: fromNano(it.price_per_day),
+          minDurationSec: it.min_duration || 86400, maxDurationSec: it.max_duration || 86400,
+          owner: it.owner || null, attrs: JSON.stringify(it.attributes || []), listedAt: it.listed_at || null,
+        },
+        create: {
+          nftAddress: it.nft_address, kind: section, name: it.nft_name,
+          pricePerDay: fromNano(it.price_per_day), minDurationSec: it.min_duration || 86400,
+          maxDurationSec: it.max_duration || 86400, owner: it.owner || null,
+          attrs: JSON.stringify(it.attributes || []), listedAt: it.listed_at || null,
+        },
+      });
     }
-    res = await maFetch(`/v1/nfts/collections/${addr}/`, { query: { ...params, filter_by: "onsale" } as Record<string, string | number | undefined | null> });
+  } catch {
+    /* کش اختیاری است */
   }
-  if (res.status !== 200 || !res.body?.items) {
-    if (isTokenInvalid(res.body)) return { items: [], cursor: null, paid: false, notice: TOKEN_INVALID_FA };
-    const paid = isPaidRequired(res.status, res.body);
-    return { items: [], cursor: null, paid, notice: paid ? 'فید فروش نیازمند پلن API مارکت‌اپ است — فید اجاره نمایش داده می‌شود' : 'فید فروش موقتاً در دسترس نیست' };
-  }
-  const items: FeedItem[] = (res.body.items || []).map((it) => {
-    const minBid = fromNano(it.min_bid);
-    const maxBid = it.max_bid ? fromNano(it.max_bid) : null;
-    return {
-      key: it.address,
-      source: 'marketapp',
-      kind: section,
-      address: it.address,
-      name: it.name,
-      sub: section === 'usernames' ? `${it.name.replace(/^@/, '')}.t.me` : '',
-      num: it.item_num ?? (it.name.match(/#(\d+)/) ? Number(it.name.match(/#(\d+)/)![1]) : null),
-      collectionAddress: it.collection_address,
-      attrs: it.attributes || [],
-      mode: 'sale',
-      priceTon: minBid,
-      minBidTon: minBid,
-      maxBidTon: maxBid,
-      owner: it.real_owner || it.owner || null,
-      listedAt: it.listed_at ?? null,
-    } as FeedItem;
-  });
-  return { items, cursor: (res.body as { cursor?: string }).cursor || null, paid: false };
 }
 
-// ---------------- لیستینگ‌های محلی سایت ----------------
-export async function getLocalListings(section: Section, mode: FeedMode): Promise<FeedItem[]> {
+/** اطلاعات اجاره یک آیتم از کش — کار بدون پلن پولی */
+export async function getRentCached(address: string) {
+  try {
+    return await db.rentCache.findUnique({ where: { nftAddress: address } });
+  } catch {
+    return null;
+  }
+}
+
+// ---------------- لیستینگ‌های محلی سایت (اجاره + خرید مستقیم) ----------------
+export async function getLocalListings(section: Section): Promise<FeedItem[]> {
   try {
     const rows = await db.localListing.findMany({
-      where: { kind: section === 'usernames' ? 'username' : section === 'numbers' ? 'number' : 'gift', status: 'ACTIVE' },
+      where: { kind: KIND_DB[section], status: 'ACTIVE' },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
-    return rows
-      .filter((r) => (mode === 'rent' ? !!r.rentPerDayTon : !!r.priceTon))
-      .map((r) => ({
-        key: `local:${r.id}`,
-        source: 'local',
-        kind: section,
-        name: r.name,
-        sub: section === 'usernames' ? `${r.name.replace(/^@/, '')}.t.me` : '',
-        num: r.itemNum ?? null,
-        collectionSlug: r.collectionSlug || null,
-        attrs: [],
-        mode,
-        priceTon: mode === 'rent' ? r.rentPerDayTon : r.priceTon,
-        minDurationSec: r.rentMinDays ? r.rentMinDays * 86400 : null,
-        maxDurationSec: r.rentMaxDays ? r.rentMaxDays * 86400 : null,
-        owner: r.ownerWallet,
-      } as FeedItem));
+    const out: FeedItem[] = [];
+    for (const r of rows) {
+      if (r.rentPerDayTon) {
+        out.push({
+          key: `local:${r.id}:rent`,
+          source: 'local', kind: section,
+          address: `local:${r.id}`,
+          name: r.name,
+          sub: section === 'usernames' ? `${r.name.replace(/^@/, '')}.t.me` : '',
+          num: r.itemNum ?? null,
+          collectionSlug: r.collectionSlug || null,
+          attrs: [],
+          mode: 'rent',
+          priceTon: r.rentPerDayTon,
+          minDurationSec: (r.rentMinDays ?? 1) * 86400,
+          maxDurationSec: (r.rentMaxDays ?? 30) * 86400,
+          owner: r.ownerWallet,
+          listedAt: Math.floor(r.createdAt.getTime() / 1000),
+        });
+      }
+      if (r.priceTon) {
+        out.push({
+          key: `local:${r.id}:sale`,
+          source: 'local', kind: section,
+          address: `local:${r.id}`,
+          name: r.name,
+          sub: section === 'usernames' ? `${r.name.replace(/^@/, '')}.t.me` : '',
+          num: r.itemNum ?? null,
+          collectionSlug: r.collectionSlug || null,
+          attrs: [],
+          mode: 'sale',
+          priceTon: r.priceTon,
+          owner: r.ownerWallet,
+          listedAt: Math.floor(r.createdAt.getTime() / 1000),
+        });
+      }
+    }
+    return out;
   } catch {
     return [];
   }
 }
 
-// ---------------- فید ترکیبی (فروش → فال‌بک اجاره → لیستینگ محلی) ----------------
+// ---------------- فید ترکیبی صفحه بازار (اجاره مارکت‌اپ + لیستینگ محلی) ----------------
 export async function getFeed(
   section: Section,
-  mode: FeedMode,
   params: { cursor?: string; limit?: number; collection_address?: string; sort_by?: string } = {},
 ): Promise<FeedResult> {
-  let result: FeedResult;
-  if (mode === 'sale') {
-    result = await getSaleFeed(section, params);
-    if (result.paid) {
-      const rent = await getRentFeed(section, { ...params, sort_by: params.sort_by || 'price_per_day' });
-      const local = await getLocalListings(section, 'sale');
-      const localRent = await getLocalListings(section, 'rent');
-      result = { items: [...local, ...rent.items, ...localRent], cursor: rent.cursor, paid: true, notice: result.notice };
-    } else {
-      result = { ...result, items: [...(await getLocalListings(section, 'sale')), ...result.items] };
-    }
-  } else {
-    const rent = await getRentFeed(section, params);
-    const local = await getLocalListings(section, 'rent');
-    result = { ...rent, items: [...local, ...rent.items] };
-  }
-  return result;
+  const rent = await getRentFeed(section, params);
+  const local = await getLocalListings(section);
+  return { ...rent, items: [...local, ...rent.items] };
 }
 
 // ---------------- اطلاعات تک آیتم ----------------
@@ -198,7 +186,7 @@ export type ItemDetail = {
   ok: boolean;
   paid?: boolean;
   tokenInvalid?: boolean;
-  source: 'marketapp' | 'tonapi' | 'none';
+  source: 'marketapp' | 'tonapi' | 'rentcache' | 'none';
   name: string;
   address: string;
   collectionAddress?: string;
@@ -240,7 +228,7 @@ export async function getItemInfo(address: string): Promise<ItemDetail> {
     if ('max_duration' in sd) d.maxDurationSec = (sd.max_duration as number) || null;
     if ('discount_pd' in sd) d.discountPd = (sd.discount_pd as number) ?? null;
     if ('rented_by' in sd) d.rentedBy = (sd.rented_by as string) || null;
-    if ('end_time' in sd && (r.body.status === 'rented')) d.rentEndSec = (sd.end_time as number) || null;
+    if ('end_time' in sd && r.body.status === 'rented') d.rentEndSec = (sd.end_time as number) || null;
     return {
       ok: true,
       source: 'marketapp',
@@ -254,7 +242,27 @@ export async function getItemInfo(address: string): Promise<ItemDetail> {
     };
   }
 
-  // فال‌بک: tonapi (رایگان و همیشه فعال)
+  // فال‌بک ۱: کش اجاره (endpoint رایگان) — حتی وقتی nfts/{addr} پولی است، اجاره کار می‌کند
+  const rc = await getRentCached(address);
+  if (rc) {
+    const attrs = JSON.parse(rc.attrs || '[]') as { trait_type: string; value: string | number }[];
+    return {
+      ok: true,
+      source: 'rentcache',
+      name: rc.name,
+      address,
+      attrs,
+      status: 'for_rent',
+      details: {
+        pricePerDayTon: rc.pricePerDay,
+        minDurationSec: rc.minDurationSec,
+        maxDurationSec: rc.maxDurationSec,
+      },
+      owner: rc.owner,
+    };
+  }
+
+  // فال‌بک ۲: tonapi (رایگان و همیشه فعال)
   try {
     const res = await fetch(`https://tonapi.io/v2/nfts/${encodeURIComponent(address)}`, { cache: 'no-store' });
     if (res.ok) {
@@ -281,6 +289,6 @@ export async function getItemInfo(address: string): Promise<ItemDetail> {
   } catch {
     /* ادامه */
   }
-  const paid = isPaidRequired(r.status, r.body);
+  const paid = r.status === 402;
   return { ok: false, paid, tokenInvalid: isTokenInvalid(r.body), source: 'none', name: '', address, attrs: [] };
 }

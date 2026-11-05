@@ -2,142 +2,298 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ================================================================
+   فونت‌های اینترنتی — Inter (لاتین/ارقام) + Vazirmatn (فارسی) + Gulzar (نستعلیق)
+   ================================================================ */
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/inter-latin-ext-400.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/inter-latin-400.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 500; font-display: swap; src: url('/fonts/inter-latin-500.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/inter-latin-600.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 700; font-display: swap; src: url('/fonts/inter-latin-ext-700.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 700; font-display: swap; src: url('/fonts/inter-latin-700.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 800; font-display: swap; src: url('/fonts/inter-latin-800.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+@font-face { font-family: 'Vazirmatn'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/vazirmatn-arabic-400.woff2') format('woff2'); unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0898-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC; }
+@font-face { font-family: 'Vazirmatn'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/vazirmatn-latin-ext-400.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0; }
+@font-face { font-family: 'Vazirmatn'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/vazirmatn-latin-400.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Vazirmatn'; font-style: normal; font-weight: 500; font-display: swap; src: url('/fonts/vazirmatn-arabic-500.woff2') format('woff2'); unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0898-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC; }
+@font-face { font-family: 'Vazirmatn'; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/vazirmatn-arabic-600.woff2') format('woff2'); unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0898-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC; }
+@font-face { font-family: 'Vazirmatn'; font-style: normal; font-weight: 700; font-display: swap; src: url('/fonts/vazirmatn-arabic-700.woff2') format('woff2'); unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0898-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC; }
+@font-face { font-family: 'Vazirmatn'; font-style: normal; font-weight: 700; font-display: swap; src: url('/fonts/vazirmatn-latin-700.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+@font-face { font-family: 'Gulzar'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/gulzar-arabic-400.woff2') format('woff2'); unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFC; }
+@font-face { font-family: 'Gulzar'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/gulzar-latin-ext-400.woff2') format('woff2'); unicode-range: U+0100-02BA, U+1D00-1DBF, U+1E00-1E9F, U+2020, U+20A0-20AB, U+20AD-20C0; }
+@font-face { font-family: 'Gulzar'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/gulzar-latin-400.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+2000-206F, U+20AC, U+2122, U+2212, U+FEFF, U+FFFD; }
+
+/* ================================================================
+   پایه — پس‌زمینه مشکی + احساس اپلیکیشن روی موبایل
+   ================================================================ */
 :root {
   color-scheme: dark;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-inout: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --accent: #1691c4;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
 }
 
 html,
 body {
-  background: #0e1620;
-  color: #f1f5f8;
-  font-family: Vazirmatn, system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
+  background: #05080c;
+  color: #f0f5fa;
+  font-family: Inter, Vazirmatn, system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
+  overscroll-behavior-y: none;
 }
 
-/* ---------- اسکرول‌بار ---------- */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #2a3a4c transparent;
-}
-*::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-*::-webkit-scrollbar-thumb {
-  background: #2a3a4c;
-  border-radius: 8px;
+/* فقط لینک‌ها اسکرول افقی نگیرند؛ جدول‌ها خودشان اسکرول دارند */
+body { text-rendering: optimizeLegibility; }
+
+/* فشردن — بازخورد لمسی (بازخورد :active روی همه ورودی‌ها کار می‌کند) */
+button, a[role='button'], .pressable {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-/* ---------- تایپوگرافی فرگمنتی ---------- */
+/* ارقام قیمت‌ها با Inter — مثل فرگمنت */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+:where(input, textarea, select) { font-size: 16px; } /* ضد زوم iOS روی فوکوس */
+@media (min-width: 768px) {
+  :where(input, textarea, select) { font-size: 14px; }
+}
+
+/* اسکرول‌بار */
+* { scrollbar-width: thin; scrollbar-color: #22303f transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: #22303f; border-radius: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+:focus-visible {
+  outline: 2px solid rgba(44, 178, 224, 0.7);
+  outline-offset: 2px;
+}
+
+/* ================================================================
+   توپ‌های متحرک پس‌زمینه — نرم و زنده (transform/opacity فقط، GPU)
+   ================================================================ */
+.orbs {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(26px);
+  will-change: transform, opacity;
+  animation: orb-drift var(--dur, 30s) var(--ease-inout) var(--del, 0s) infinite alternate;
+}
+@keyframes orb-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(var(--s0, 1));            opacity: var(--o0, 0.12); }
+  33%  { transform: translate3d(calc(var(--dx, 6vw) * -0.7), calc(var(--dy, 7vh) * 0.5), 0) scale(var(--s1, 1.18)); opacity: var(--o1, 0.2); }
+  66%  { transform: translate3d(calc(var(--dx, 6vw) * 0.4), calc(var(--dy, 7vh) * -0.8), 0) scale(calc(var(--s0, 1) * 0.92)); opacity: var(--o0, 0.12); }
+  100% { transform: translate3d(var(--dx, 6vw), var(--dy, 7vh), 0) scale(var(--s1, 1.18)); opacity: var(--o1, 0.2); }
+}
+/* چند توپِ «ریز» بدون blur — مثل غبار شناور */
+.orb-dot {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(2px);
+  will-change: transform, opacity;
+  animation: dot-float var(--dur, 18s) linear var(--del, 0s) infinite;
+}
+@keyframes dot-float {
+  0%   { transform: translate3d(0, 0, 0);         opacity: 0; }
+  15%  { opacity: var(--o0, 0.55); }
+  50%  { transform: translate3d(calc(var(--dx, 40px) * 0.8), calc(var(--dy, -90px) * 0.5), 0); opacity: var(--o1, 0.25); }
+  85%  { opacity: var(--o0, 0.55); }
+  100% { transform: translate3d(var(--dx, 40px), var(--dy, -90px), 0); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .orb, .orb-dot { animation: none; }
+}
+
+/* ================================================================
+   تایپوگرافی فرگمنتی
+   ================================================================ */
 .hero-title {
   @apply text-center font-extrabold;
-  font-size: clamp(24px, 4vw, 34px);
-  line-height: 1.35;
+  font-size: clamp(23px, 4.4vw, 34px);
+  line-height: 1.4;
 }
-
-.section-title {
-  @apply text-xl font-bold;
-}
-
+.section-title { @apply text-lg font-bold; }
 .logo-nasta {
   font-family: Gulzar, Vazirmatn, serif;
   font-weight: 400;
-  line-height: 1.6;
+  line-height: 1.55;
 }
-
-/* ---------- دکمه‌ها ---------- */
-.btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold transition-colors;
-}
-.btn-primary {
-  @apply btn text-white;
-  background: linear-gradient(180deg, #1ba6dc 0%, #1691c4 55%, #0c7a93 100%);
-}
-.btn-primary:hover {
-  filter: brightness(1.12);
-}
-.btn-primary:disabled {
-  @apply opacity-50;
-  filter: none;
-}
-.btn-ghost {
-  @apply btn border border-line bg-panel2 text-ink hover:border-accent;
-}
-.btn-sm {
-  @apply rounded-md px-3 py-1.5 text-xs;
-}
-
-/* ---------- ورودی‌ها ---------- */
-.input {
-  @apply w-full rounded-lg border border-line bg-panel2 px-4 py-2.5 text-sm text-ink outline-none placeholder:text-muted;
-}
-.input:focus {
-  border-color: #1691c4;
-  box-shadow: 0 0 0 3px rgba(22, 145, 196, 0.15);
-}
-select.input {
-  @apply appearance-none;
-}
-
-/* ---------- کارت/پنل ---------- */
-.card {
-  @apply rounded-xl border border-line bg-panel;
-}
-
-/* ---------- جدول فرگمنتی ---------- */
-.ftable {
-  @apply w-full text-sm;
-}
-.ftable thead th {
-  @apply px-4 py-3 text-right text-xs font-medium text-muted;
-  border-bottom: 1px solid #263444;
-}
-.ftable tbody td {
-  @apply px-4 py-3.5 align-middle;
-  border-bottom: 1px solid #1d2937;
-}
-.ftable tbody tr {
-  @apply cursor-pointer transition-colors;
-}
-.ftable tbody tr:hover {
-  background: #1a2634;
-}
-
-/* ---------- قرص وضعیت ---------- */
-.pill {
-  @apply inline-flex items-center rounded px-2 py-0.5 text-[11px] font-bold;
-}
-
-/* ---------- رادیوهای بسته (استارز/پرمیوم) ---------- */
-.pkg {
-  @apply flex w-full cursor-pointer items-center gap-3 rounded-lg border border-line bg-panel2 px-4 py-3 text-sm transition-colors;
-}
-.pkg:hover {
-  border-color: #2f4156;
-}
-.pkg.checked {
-  border-color: #1691c4;
-  box-shadow: 0 0 0 1px #1691c4;
-}
-.pkg input {
-  accent-color: #1691c4;
-}
-
-/* ---------- تب‌ها ---------- */
-.tab {
-  @apply px-1 pb-3 pt-1 text-sm font-bold text-muted transition-colors;
-}
-.tab.active {
-  color: #f1f5f8;
-  border-bottom: 3px solid #1691c4;
-}
-
-/* ---------- فرگمنت: هیرو ---------- */
 .hero-sub {
   @apply mx-auto max-w-2xl text-center text-sm leading-7 text-muted;
 }
 
-/* ---------- چرخان ---------- */
-.spin {
-  @apply inline-block h-4 w-4 animate-spin rounded-full border-2 border-line;
-  border-top-color: #1691c4;
+/* ================================================================
+   دکمه‌ها — بازخورد فشردن ۱۵۰ms، hover فقط با ماوس
+   ================================================================ */
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold;
+  transition: transform 150ms var(--ease-out), filter 150ms var(--ease-out), background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
 }
+.btn:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover { filter: brightness(1.08); }
+}
+
+.btn-primary {
+  @apply btn text-white;
+  background: linear-gradient(180deg, #1ba6dc 0%, #1691c4 55%, #0c7a93 100%);
+  box-shadow: 0 6px 18px -8px rgba(22, 145, 196, 0.55);
+}
+.btn-primary:disabled { @apply opacity-50; filter: none; transform: none; }
+
+.btn-rent {
+  @apply btn text-white;
+  background: linear-gradient(180deg, #19b98a 0%, #128f6b 100%);
+  box-shadow: 0 6px 18px -8px rgba(18, 143, 107, 0.55);
+}
+.btn-rent:disabled { @apply opacity-50; filter: none; }
+
+.btn-ghost {
+  @apply btn border border-line bg-panel2 text-ink;
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn-ghost:hover { border-color: rgba(22, 145, 196, 0.7); }
+}
+
+.btn-sm { @apply rounded-md px-3 py-1.5 text-xs; }
+.btn-sm:active { transform: scale(0.96); }
+
+/* ================================================================
+   ورودی‌ها
+   ================================================================ */
+.input {
+  @apply w-full rounded-lg border border-line bg-panel2 px-4 py-2.5 text-sm text-ink outline-none placeholder:text-muted;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.input:focus {
+  border-color: #1691c4;
+  box-shadow: 0 0 0 3px rgba(22, 145, 196, 0.16);
+}
+select.input { @apply appearance-none; }
+
+/* ================================================================
+   کارت/پنل + اسکلت لودینگ
+   ================================================================ */
+.card { @apply rounded-xl border border-line bg-panel; }
+
+.skeleton {
+  @apply relative overflow-hidden rounded-lg bg-panel2;
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after { animation: none; }
+}
+
+/* ================================================================
+   جدول فرگمنتی — نظم دقیق ستون‌ها، هدر چسبان، ردیف لمسی
+   ================================================================ */
+.ftable { @apply w-full text-sm border-collapse; }
+.ftable thead th {
+  @apply sticky top-0 z-10 bg-panel px-4 py-3 text-right text-xs font-semibold text-muted;
+  border-bottom: 1px solid #22303f;
+  white-space: nowrap;
+}
+.ftable tbody td {
+  @apply px-4 py-3 align-middle;
+  border-bottom: 1px solid #121b26;
+}
+.ftable tbody tr {
+  @apply cursor-pointer;
+  transition: background-color 140ms ease;
+}
+.ftable tbody tr:last-child td { border-bottom: none; }
+@media (hover: hover) and (pointer: fine) {
+  .ftable tbody tr:hover { background: #0d1520; }
+}
+.ftable tbody tr:active { background: #111c29; }
+
+/* ================================================================
+   قرص وضعیت / چیپ
+   ================================================================ */
+.pill { @apply inline-flex items-center rounded px-2 py-0.5 text-[11px] font-bold whitespace-nowrap; }
+.chip {
+  @apply inline-flex items-center gap-1 rounded-md bg-panel2 px-2 py-1 text-[11px] text-muted;
+  border: 1px solid #17212e;
+}
+
+/* ================================================================
+   بسته‌های استارز/پرمیوم
+   ================================================================ */
+.pkg {
+  @apply flex w-full cursor-pointer items-center gap-3 rounded-lg border border-line bg-panel2 px-4 py-3 text-sm;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms var(--ease-out);
+}
+.pkg:active { transform: scale(0.99); }
+.pkg.checked { border-color: #1691c4; box-shadow: 0 0 0 1px #1691c4; }
+.pkg input { accent-color: #1691c4; }
+
+/* ================================================================
+   تب‌ها — نشانگر رنگی نرم (transition به‌جای keyframes)
+   ================================================================ */
+.tab {
+  @apply px-1 pb-3 pt-1 text-sm font-bold text-muted;
+  transition: color 160ms ease, border-color 160ms ease;
+  border-bottom: 3px solid transparent;
+  user-select: none;
+}
+.tab.active { color: #f0f5fa; border-bottom-color: #1691c4; }
+.tab:active { opacity: 0.8; }
+
+/* ورود نرم بخش‌ها — @starting-style (فقط transform/opacity) */
+.fade-in {
+  animation: fade-in 220ms var(--ease-out) both;
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+.stagger > * { animation: fade-in 220ms var(--ease-out) both; }
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 40ms; }
+.stagger > *:nth-child(3) { animation-delay: 80ms; }
+.stagger > *:nth-child(4) { animation-delay: 120ms; }
+.stagger > *:nth-child(5) { animation-delay: 160ms; }
+.stagger > *:nth-child(n+6) { animation-delay: 200ms; }
+@media (prefers-reduced-motion: reduce) {
+  .fade-in, .stagger > * { animation: none; }
+}
+
+/* ================================================================
+   چرخان — سریع (حس لود سریع‌تر)
+   ================================================================ */
+.spin {
+  @apply inline-block h-4 w-4 rounded-full border-2 border-line;
+  border-top-color: #1691c4;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* نوچ و ناحیه امن موبایل */
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }

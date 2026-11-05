@@ -2,10 +2,11 @@ import Link from 'next/link';
 
 export function Footer() {
   return (
-    <footer className="mt-auto border-t border-line bg-[#0B121A]">
+    <footer className="mt-auto border-t border-line bg-[#04070A] safe-bottom">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-2 px-4 py-5 text-xs text-muted">
         <Link href="/rent" className="hover:text-ink">اجاره‌های برتر</Link>
-        <Link href="/login" className="hover:text-ink">ورود</Link>
+        <Link href="/inventory" className="hover:text-ink">انباری من</Link>
+        <Link href="/cart" className="hover:text-ink">سبد خرید</Link>
         <span>قوانین</span>
         <span>حریم خصوصی</span>
         <span className="flex items-center gap-1">

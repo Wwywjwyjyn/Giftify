@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Search } from 'lucide-react';
+import { Search, KeyRound } from 'lucide-react';
 import type { FeedItem, Section } from '@/lib/market';
 import { FeedTable } from './FeedTable';
 import { TonDiamond } from './ui-bits';
@@ -36,7 +36,7 @@ export function RentView() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch(`/api/market/feed?section=${cat}&mode=rent&limit=60`, { cache: 'no-store' });
+      const r = await fetch(`/api/market/feed?section=${cat}&limit=60`, { cache: 'no-store' });
       const j = await r.json();
       setItems(j.items || []);
       setNotice(j.notice || '');
@@ -70,21 +70,21 @@ export function RentView() {
         <h1 className="hero-title">اجاره گیفت‌ها، یوزرنیم‌ها و شماره‌ها</h1>
         <p className="hero-sub mt-2">
           گیفت خود را به دیگران اجاره دهید یا خودتان اجاره بگیرید و روی پروفایل تلگرام نمایش دهید. مالکیت دست‌نخورده می‌ماند؛
-          مستأجر فقط اجازه «پوشیدن» گیفت روی پروفایل خودش را دارد و امکان انتقال آن به کسی را ندارد.
+          مستأجر فقط اجازهٔ «پوشیدن» گیفت روی پروفایل خودش را دارد و امکان انتقال آن به کسی را ندارد.
         </p>
       </div>
 
-      {/* توضیح نحوه کار */}
-      <div className="mb-6 grid gap-3 sm:grid-cols-2">
+      {/* توضیح نحوهٔ کار */}
+      <div className="stagger mb-6 grid gap-3 sm:grid-cols-2">
         <div className="card p-4 text-sm leading-7 text-muted">
           <div className="mb-1 font-bold text-ink">اگر اجاره‌دهنده هستید</div>
-          گیفت‌هایتان را از پنل اجاره انتخاب کنید، قیمت هر روز و بازه مدت را مشخص کنید و تراکنش را امضا کنید تا گیفت
+          گیفت‌هایتان را با پنل مدیریت سایت اجاره‌دار کنید، قیمت هر روز و بازهٔ مدت را مشخص کنید و تراکنش را امضا کنید تا گیفت
           به قرارداد اجاره منتقل شود. مستأجر نمی‌تواند گیفت را جابه‌جا کند.
         </div>
         <div className="card p-4 text-sm leading-7 text-muted">
           <div className="mb-1 font-bold text-ink">اگر اجاره‌گیرنده هستید</div>
-          گیفت موردنظر را از بازار انتخاب و هزینه دوره را بپردازید. سپس با «اتصال به تلگرام» قرارداد اجاره را به
-          فرگمنت وصل کنید تا گیفت روی پروفایل شما نمایش داده شود.
+          روی ردیف هر آیتم «اجاره کردن» را بزنید، مدت را انتخاب و هزینهٔ دوره را با TON Connect بپردازید. سپس با «اتصال به تلگرام»
+          قرارداد اجاره به فرگمنت وصل می‌شود تا گیفت روی پروفایل شما نمایش داده شود.
         </div>
       </div>
 
@@ -109,9 +109,17 @@ export function RentView() {
       )}
 
       {loading ? (
-        <div className="flex justify-center py-16"><span className="spin" /></div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <div key={i} className="card p-2.5">
+              <div className="skeleton h-36 w-full" />
+              <div className="skeleton mt-2 h-3 w-2/3" />
+              <div className="skeleton mt-2 h-3 w-1/3" />
+            </div>
+          ))}
+        </div>
       ) : (
-        <FeedTable section={cat} mode="rent" items={filtered} />
+        <FeedTable section={cat} items={filtered} />
       )}
 
       {/* اجاره‌های فعال من */}
@@ -128,7 +136,7 @@ export function RentView() {
                   {myRented.map((r, i) => (
                     <tr key={i}>
                       <td className="font-bold">{r.nft_name || '—'}</td>
-                      <td><TonDiamond className="text-ton" /> {fmtTon(Number(r.price_per_day || 0) / 1e9)} / روز</td>
+                      <td className="tabular"><TonDiamond className="text-ton" /> {fmtTon(Number(r.price_per_day || 0) / 1e9)} / روز</td>
                       <td className="text-xs text-muted">{r.end_time ? new Date(r.end_time * 1000).toLocaleDateString('fa-IR') : '—'}</td>
                     </tr>
                   ))}
@@ -153,7 +161,7 @@ export function RentView() {
                   {history.map((r, i) => (
                     <tr key={i}>
                       <td className="font-bold">{r.nft_name || '—'}</td>
-                      <td><TonDiamond className="text-ton" /> {fmtTon(Number(r.price_per_day || 0) / 1e9)}</td>
+                      <td className="tabular"><TonDiamond className="text-ton" /> {fmtTon(Number(r.price_per_day || 0) / 1e9)}</td>
                       <td className="text-xs text-muted">{r.duration ? fmtDurationRange(r.duration, r.duration) : '—'}</td>
                       <td className="text-xs text-muted" dir="ltr">{shortAddr(r.nft_address)}</td>
                     </tr>
@@ -165,8 +173,9 @@ export function RentView() {
         </div>
       )}
 
-      <div className="mt-8 text-center text-xs text-muted">
-        برای اجاره دادن گیفت‌های خودتان، به <Link href="/item/local:new" className="text-accent-hi hover:underline">پنل مدیریت</Link> بروید یا از طریق مالک سایت اقدام کنید.
+      <div className="mt-8 text-center text-xs leading-6 text-muted">
+        <KeyRound size={12} className="inline align-[-1px]" /> برای اجاره دادن گیفت‌های خودتان، از{' '}
+        <Link href="/admin" className="text-accent-hi hover:underline">پنل مدیریت</Link> لیستینگ اجاره بسازید یا از طریق مالک سایت اقدام کنید.
       </div>
     </div>
   );

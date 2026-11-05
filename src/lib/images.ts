@@ -1,20 +1,15 @@
+import { GIFT_SLUGS, collectionKeyOf, guessGiftSlugFromName, giftImageUrlFromSlug, giftImageFromItemName, telegramLinkFromItemName } from './giftimg';
 import { TONAPI_BASE } from './env';
 import { db } from './db';
 
+export { GIFT_SLUGS, collectionKeyOf, guessGiftSlugFromName, giftImageUrlFromSlug, giftImageFromItemName, telegramLinkFromItemName };
+
 /**
- * عکس گیفت‌ها — سه لایه:
+ * عکس گیفت‌ها — سه لایه با پوشش کامل (سمت سرور):
  *  1) کش دیتابیس (ImageCache)
- *  2) ساخت از الگوی معروف فرگمنت: nft.fragment.com/gift/{slug}-{num}.webp
- *  3) tonapi.io (متادیتای واقعی NFT) — و یادگیری slug کالکشن برای دفعات بعد
+ *  2) الگوی واقعی فرگمنت: nft.fragment.com/gift/{slug}-{num}.webp
+ *  3) tonapi.io (متادیتای واقعی NFT) — برای هر NFT دیگر
  */
-
-export function guessGiftSlugFromName(collectionName: string): string {
-  return collectionName.toLowerCase().replace(/[^a-z]/g, '');
-}
-
-export function giftImageUrlFromSlug(slug: string, num: number): string {
-  return `https://nft.fragment.com/gift/${slug}-${num}.webp`;
-}
 
 async function cachedImage(address: string): Promise<string | null> {
   try {
@@ -38,7 +33,6 @@ async function saveImageCache(address: string, url: string) {
 }
 
 export async function getGiftSlug(collectionAddress: string, collectionName: string): Promise<string | null> {
-  // کش کالکشن → اولین آیتمِ tonapi → استخراج slug از URL عکس
   const key = `giftslug:${collectionAddress}`;
   const cached = await cachedImage(key);
   if (cached) return cached === '-' ? null : cached;
@@ -74,7 +68,7 @@ export async function resolveTonapiImage(address: string): Promise<{ image: stri
 }
 
 /**
- * عکس یک NFT (روی صفحات لیست، collectionSlug+itemNum پاس بدهید تا هیچ درخواستی زده نشود)
+ * عکس یک NFT برای صفحه تک‌آیتم — اول کش، بعد الگوی فرگمنت، آخر tonapi.
  */
 export async function resolveImage(opts: {
   address: string;
@@ -82,7 +76,6 @@ export async function resolveImage(opts: {
   collectionSlug?: string | null;
   itemNum?: number | null;
 }): Promise<string | null> {
-  if (opts.kind !== 'gift') return null; // یوزرنیم/شماره: تایل متنی
   const { address } = opts;
   const cached = await cachedImage(address);
   if (cached && cached !== '-') return cached;

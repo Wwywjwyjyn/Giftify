@@ -28,7 +28,7 @@ model Setting {
 model Order {
   id        String   @id @default(cuid())
   userId    Int?
-  kind      String // stars | premium | stars_giveaway | premium_giveaway | ads | telegram_topup | nft | rent
+  kind      String // stars | premium | ads | telegram_topup | nft | rent
   title     String
   amountTon Float // مبلغ اصلی (TON)
   feeTon    Float    @default(0) // کارمزد سایت (شفاف ثبت می‌شود)
@@ -63,16 +63,34 @@ model ImageCache {
 }
 
 model LocalListing {
-  id            String   @id @default(cuid())
-  ownerWallet   String
-  kind          String // username | number | gift
-  name          String
+  id             String   @id @default(cuid())
+  ownerWallet    String
+  kind           String // username | number | gift
+  name           String
   collectionSlug String?
-  itemNum       Int?
-  priceTon      Float?
-  rentPerDayTon Float?
-  rentMinDays   Int?
-  rentMaxDays   Int?
-  status        String   @default("ACTIVE") // ACTIVE | INACTIVE
-  createdAt     DateTime @default(now())
+  itemNum        Int?
+  priceTon       Float?
+  rentPerDayTon  Float?
+  rentMinDays    Int?
+  rentMaxDays    Int?
+  status         String   @default("ACTIVE") // ACTIVE | INACTIVE
+  createdAt      DateTime @default(now())
+}
+
+/**
+ * کش آیتم‌های اجاره — چون endpoint جزئیات NFT مارکت‌اپ «پولی» است،
+ * اطلاعات اجاره هر آیتم از فیدِ رایگان اجاره اینجا ذخیره می‌شود تا
+ * صفحه آیتم و دکمه «اجاره کردن» بدون پلن پولی هم کار کنند.
+ */
+model RentCache {
+  nftAddress     String   @id
+  kind           String // gifts | usernames | numbers
+  name           String
+  pricePerDay    Float // TON در روز
+  minDurationSec Int
+  maxDurationSec Int
+  owner          String?
+  attrs          String   @default("[]")
+  listedAt       Int?
+  updatedAt      DateTime @updatedAt
 }

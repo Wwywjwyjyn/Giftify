@@ -1,14 +1,14 @@
-/** لوزی TON برای نمایش قیمت (مثل فرگمنت) */
-export function TonDiamond({ className = 'inline-block h-3.5 w-3.5 align-[-2px]' }: { className?: string }) {
+/** لوزی TON برای نمایش قیمت (مثل فرگمنت) — سایز پیش‌فرض همیشه حفظ می‌شود */
+export function TonDiamond({ className = '' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-label="TON">
+    <svg viewBox="0 0 24 24" className={`inline-block h-3.5 w-3.5 align-[-2px] shrink-0 ${className}`} fill="currentColor" aria-label="TON">
       <path d="M12 2 22 9.5 12 22 2 9.5Z" />
     </svg>
   );
 }
 
 const PILL_STYLES: Record<string, string> = {
-  sale: 'bg-accent/15 text-accent-hi',
+  buy: 'bg-accent/15 text-accent-hi',
   auction: 'bg-[#8B5CF6]/15 text-[#B79DFB]',
   rent: 'bg-ok/15 text-ok',
   sold: 'bg-bad/15 text-bad',
@@ -17,11 +17,11 @@ const PILL_STYLES: Record<string, string> = {
 };
 
 const PILL_LABELS: Record<string, string> = {
-  sale: 'فروش',
+  buy: 'خرید',
   auction: 'حراج',
   rent: 'اجاره',
-  sold: 'فروخته شد',
-  resale: 'دست‌دوم',
+  sold: 'تکمیل شد',
+  resale: 'غیرقابل خرید',
   local: 'لیستینگ سایت',
 };
 

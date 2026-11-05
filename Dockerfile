@@ -2,7 +2,6 @@ FROM node:22-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache libc6-compat openssl
 COPY package.json package-lock.json* ./
-COPY prisma ./prisma
 RUN npm install --no-audit --no-fund
 
 FROM node:22-alpine AS builder
@@ -23,9 +22,5 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/server.js ./server.js
-COPY --from=builder /app/next.config.mjs ./next.config.mjs
-ENV DATABASE_URL="file:/data/dev.db"
-ENV PORT=3000
-RUN mkdir -p /data
 EXPOSE 3000
 CMD ["sh", "-c", "npx prisma db push --skip-generate && node server.js"]

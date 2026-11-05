@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { maFetch } from '@/lib/marketapp';
 import { fromNano } from '@/lib/format';
 import { db } from '@/lib/db';
-import { getSessionUser, requireAdminJson } from '@/lib/auth';
+import { getSessionUser } from '@/lib/auth';
 import { getSettings, feePercentOf } from '@/lib/settings';
 import type { SendTx } from '@/lib/types';
 
@@ -15,12 +15,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ action: st
   const body = await req.json().catch(() => ({}));
   const settings = await getSettings();
 
-  // عملیات روی حساب صاحب توکن API فقط برای مدیر
-  if (['cancel', 'rent-out', 'update-settings'].includes(op)) {
-    const denied = await requireAdminJson();
-    if (denied) return denied;
-  }
-
   try {
     // پرداخت اجاره
     if (op === 'pay') {
@@ -28,6 +22,33 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ action: st
       const duration = Number(body.duration || 0);
       const pricePerDay = String(body.price_per_day || '');
       if (!nft || !duration || !pricePerDay) return Response.json({ ok: false, detail: 'پارامترهای اجاره ناقص است' }, { status: 400 });
+
+      // اجارهٔ لیستینگ محلی سایت — ثبت سفارش برای تأیید مالک (بدون endpoint پولی مارکت‌اپ)
+      if (nft.startsWith('local:')) {
+        const listing = await db.localListing.findUnique({ where: { id: nft.replace('local:', '') } });
+        if (!listing || !listing.rentPerDayTon) return Response.json({ ok: false, detail: 'لیستینگ اجاره یافت نشد' }, { status: 404 });
+        const user = await getSessionUser();
+        const total = listing.rentPerDayTon * (duration / 86400);
+        const feeTon = Math.round(total * feePercentOf(settings, 'rent')) / 100;
+        const order = await db.order.create({
+          data: {
+            userId: user?.id ?? null, kind: 'rent',
+            title: `اجارهٔ ${Math.round(duration / 86400)} روزهٔ ${listing.name} (لیستینگ سایت)`,
+            amountTon: total, feeTon, currency: 'TON', status: 'PENDING_TX',
+            meta: JSON.stringify({ local: true, listingId: listing.id, duration }),
+          },
+        });
+        if (feeTon > 0 && settings.fee_wallet) {
+          await db.feeRecord.create({ data: { orderId: order.id, section: 'rent', amountTon: feeTon, wallet: settings.fee_wallet, status: 'PENDING' } });
+        }
+        return Response.json({
+          ok: true, orderId: order.id, local_rent: true,
+          tx: {
+            validUntil: Math.floor(Date.now() / 1000) + 300,
+            messages: [{ address: listing.ownerWallet, amount: String(Math.round(total * 1e9)) }],
+          },
+        });
+      }
 
       const r = await maFetch<SendTx>(`/v1/rent/${nft}/pay/`, {
         method: 'POST',
@@ -107,11 +128,6 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ action: str
   const { action } = await ctx.params;
   const op = action[0];
   const sp = req.nextUrl.searchParams;
-
-  if (op === 'my' || op === 'history') {
-    const denied = await requireAdminJson();
-    if (denied) return denied;
-  }
 
   try {
     if (op === 'my') {

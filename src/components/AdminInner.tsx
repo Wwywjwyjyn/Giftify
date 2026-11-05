@@ -123,7 +123,7 @@ export function AdminInner() {
           )}
         </div>
         <div className="card p-4 text-sm">
-          <div className="text-muted">فید فروش (پلن API)</div>
+          <div className="text-muted">فید خرید NFT (پلن API)</div>
           <div className={`mt-1 font-bold ${health.sale_feed ? 'text-ok' : 'text-[#FBBF24]'}`}>{health.sale_feed ? 'فعال ✓' : 'نیازمند پلن'}</div>
         </div>
         <div className="card p-4 text-sm">
@@ -265,7 +265,7 @@ export function AdminInner() {
                 <option value="username">یوزرنیم</option>
                 <option value="number">شماره</option>
               </select>
-              <input className="input" placeholder="قیمت فروش (TON)" value={nf.price} onChange={(e) => setNf({ ...nf, price: e.target.value })} inputMode="decimal" />
+              <input className="input" placeholder="قیمت خرید (TON)" value={nf.price} onChange={(e) => setNf({ ...nf, price: e.target.value })} inputMode="decimal" />
               <input className="input" placeholder="اجاره هر روز (TON)" value={nf.rent} onChange={(e) => setNf({ ...nf, rent: e.target.value })} inputMode="decimal" />
               <input className="input" placeholder="حداقل روز اجاره" value={nf.min} onChange={(e) => setNf({ ...nf, min: e.target.value })} inputMode="numeric" />
               <input className="input" placeholder="حداکثر روز اجاره" value={nf.max} onChange={(e) => setNf({ ...nf, max: e.target.value })} inputMode="numeric" />
@@ -276,7 +276,7 @@ export function AdminInner() {
           <div className="card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="ftable min-w-[520px]">
-                <thead><tr><th>نام</th><th>نوع</th><th>قیمت فروش</th><th>اجاره/روز</th><th>وضعیت</th><th /></tr></thead>
+                <thead><tr><th>نام</th><th>نوع</th><th>قیمت خرید</th><th>اجاره/روز</th><th>وضعیت</th><th /></tr></thead>
                 <tbody>
                   {listings.map((l) => (
                     <tr key={l.id} className="cursor-default">
