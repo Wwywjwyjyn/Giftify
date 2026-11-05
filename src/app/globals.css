@@ -1,0 +1,143 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #0e1620;
+  color: #f1f5f8;
+  font-family: Vazirmatn, system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
+}
+
+/* ---------- اسکرول‌بار ---------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a3a4c transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2a3a4c;
+  border-radius: 8px;
+}
+
+/* ---------- تایپوگرافی فرگمنتی ---------- */
+.hero-title {
+  @apply text-center font-extrabold;
+  font-size: clamp(24px, 4vw, 34px);
+  line-height: 1.35;
+}
+
+.section-title {
+  @apply text-xl font-bold;
+}
+
+.logo-nasta {
+  font-family: Gulzar, Vazirmatn, serif;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+/* ---------- دکمه‌ها ---------- */
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold transition-colors;
+}
+.btn-primary {
+  @apply btn text-white;
+  background: linear-gradient(180deg, #1ba6dc 0%, #1691c4 55%, #0c7a93 100%);
+}
+.btn-primary:hover {
+  filter: brightness(1.12);
+}
+.btn-primary:disabled {
+  @apply opacity-50;
+  filter: none;
+}
+.btn-ghost {
+  @apply btn border border-line bg-panel2 text-ink hover:border-accent;
+}
+.btn-sm {
+  @apply rounded-md px-3 py-1.5 text-xs;
+}
+
+/* ---------- ورودی‌ها ---------- */
+.input {
+  @apply w-full rounded-lg border border-line bg-panel2 px-4 py-2.5 text-sm text-ink outline-none placeholder:text-muted;
+}
+.input:focus {
+  border-color: #1691c4;
+  box-shadow: 0 0 0 3px rgba(22, 145, 196, 0.15);
+}
+select.input {
+  @apply appearance-none;
+}
+
+/* ---------- کارت/پنل ---------- */
+.card {
+  @apply rounded-xl border border-line bg-panel;
+}
+
+/* ---------- جدول فرگمنتی ---------- */
+.ftable {
+  @apply w-full text-sm;
+}
+.ftable thead th {
+  @apply px-4 py-3 text-right text-xs font-medium text-muted;
+  border-bottom: 1px solid #263444;
+}
+.ftable tbody td {
+  @apply px-4 py-3.5 align-middle;
+  border-bottom: 1px solid #1d2937;
+}
+.ftable tbody tr {
+  @apply cursor-pointer transition-colors;
+}
+.ftable tbody tr:hover {
+  background: #1a2634;
+}
+
+/* ---------- قرص وضعیت ---------- */
+.pill {
+  @apply inline-flex items-center rounded px-2 py-0.5 text-[11px] font-bold;
+}
+
+/* ---------- رادیوهای بسته (استارز/پرمیوم) ---------- */
+.pkg {
+  @apply flex w-full cursor-pointer items-center gap-3 rounded-lg border border-line bg-panel2 px-4 py-3 text-sm transition-colors;
+}
+.pkg:hover {
+  border-color: #2f4156;
+}
+.pkg.checked {
+  border-color: #1691c4;
+  box-shadow: 0 0 0 1px #1691c4;
+}
+.pkg input {
+  accent-color: #1691c4;
+}
+
+/* ---------- تب‌ها ---------- */
+.tab {
+  @apply px-1 pb-3 pt-1 text-sm font-bold text-muted transition-colors;
+}
+.tab.active {
+  color: #f1f5f8;
+  border-bottom: 3px solid #1691c4;
+}
+
+/* ---------- فرگمنت: هیرو ---------- */
+.hero-sub {
+  @apply mx-auto max-w-2xl text-center text-sm leading-7 text-muted;
+}
+
+/* ---------- چرخان ---------- */
+.spin {
+  @apply inline-block h-4 w-4 animate-spin rounded-full border-2 border-line;
+  border-top-color: #1691c4;
+}

@@ -1,26 +1,31 @@
-# Giftify wrapper: پروژه داخل Giftify.zip است و موقع بیلد باز می‌شود
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS deps
 WORKDIR /app
-RUN apk add --no-cache openssl unzip
-COPY Giftify.zip /tmp/Giftify.zip
-RUN unzip -q /tmp/Giftify.zip -d /tmp/x && cp -a /tmp/x/Giftify/. /app/ && rm -rf /tmp/x /tmp/Giftify.zip
+RUN apk add --no-cache libc6-compat openssl
+COPY package.json package-lock.json* ./
+COPY prisma ./prisma
 RUN npm install --no-audit --no-fund
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV DATABASE_URL="file:/app/db/giftify.db"
+
+FROM node:22-alpine AS builder
+WORKDIR /app
+RUN apk add --no-cache libc6-compat openssl
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+ENV DATABASE_URL="file:./dev.db"
 RUN npx prisma generate && npm run build
 
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
-RUN apk add --no-cache openssl
 ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV DATABASE_URL="file:/app/db/giftify.db"
-COPY --from=builder /app/package.json ./package.json
+RUN apk add --no-cache openssl
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/next.config.ts ./next.config.ts
-RUN mkdir -p /app/db
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/server.js ./server.js
+COPY --from=builder /app/next.config.mjs ./next.config.mjs
+ENV DATABASE_URL="file:/data/dev.db"
+ENV PORT=3000
+RUN mkdir -p /data
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma db push --skip-generate --accept-data-loss && npm start"]
+CMD ["sh", "-c", "npx prisma db push --skip-generate && node server.js"]

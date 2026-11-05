@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  role       String   @default("USER") // ADMIN | USER — اولین کاربرِ تأییدشده = ADMIN
+  wallet     String?  @unique // آدرس TON (verified با ton_proof)
+  telegramId String?  @unique
+  name       String?
+  photo      String?
+  verified   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  lastSeen   DateTime @default(now())
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model Order {
+  id        String   @id @default(cuid())
+  userId    Int?
+  kind      String // stars | premium | stars_giveaway | premium_giveaway | ads | telegram_topup | nft | rent
+  title     String
+  amountTon Float // مبلغ اصلی (TON)
+  feeTon    Float    @default(0) // کارمزد سایت (شفاف ثبت می‌شود)
+  currency  String   @default("TON")
+  status    String   @default("PENDING_TX") // PENDING_TX | TX_SENT | DONE | FAILED
+  meta      String   @default("{}")
+  txHash    String?
+  createdAt DateTime @default(now())
+}
+
+model FeeRecord {
+  id        String   @id @default(cuid())
+  orderId   String?
+  section   String // usernames | numbers | gifts | rent | stars | premium | giveaway | ads
+  amountTon Float
+  wallet    String // کیف پول کارمزد (ادمین)
+  status    String   @default("PENDING") // PENDING | PAID
+  txHash    String?
+  createdAt DateTime @default(now())
+}
+
+model KV {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model ImageCache {
+  address   String   @id
+  url       String
+  updatedAt DateTime @updatedAt
+}
+
+model LocalListing {
+  id            String   @id @default(cuid())
+  ownerWallet   String
+  kind          String // username | number | gift
+  name          String
+  collectionSlug String?
+  itemNum       Int?
+  priceTon      Float?
+  rentPerDayTon Float?
+  rentMinDays   Int?
+  rentMaxDays   Int?
+  status        String   @default("ACTIVE") // ACTIVE | INACTIVE
+  createdAt     DateTime @default(now())
+}

@@ -1,0 +1,17 @@
+services:
+  giftify:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=file:/data/dev.db
+      - JWT_SECRET=${JWT_SECRET:-please-change-this-secret-to-random-64-chars}
+      - MARKETAPP_API_TOKEN=${MARKETAPP_API_TOKEN:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=${NEXT_PUBLIC_TELEGRAM_BOT_USERNAME:-}
+    volumes:
+      - giftify_data:/data
+    restart: unless-stopped
+
+volumes:
+  giftify_data:
