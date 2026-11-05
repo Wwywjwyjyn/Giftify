@@ -47,11 +47,18 @@ export function WalletBox() {
       if (!w?.account?.address || busy.current) return;
       busy.current = true;
       try {
-        const proof = w.connectItems?.tonProof ?? null;
+        const tp = w.connectItems?.tonProof;
+        // بدون proof (مثلاً بازگردانی خودکار اتصال) ورود سمت سرور انجام نمی‌شود
+        if (!tp || !('proof' in tp)) return;
         const r = await fetch('/api/auth/wallet', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address: w.account.address, proof }),
+          body: JSON.stringify({
+            address: w.account.address,
+            publicKey: w.account.publicKey,
+            walletStateInit: w.account.walletStateInit,
+            proof: tp.proof,
+          }),
         });
         const j = await r.json();
         setMe(j.user ?? null);

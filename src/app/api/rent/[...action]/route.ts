@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { maFetch } from '@/lib/marketapp';
 import { fromNano } from '@/lib/format';
 import { db } from '@/lib/db';
-import { getSessionUser } from '@/lib/auth';
+import { getSessionUser, requireAdminJson } from '@/lib/auth';
 import { getSettings, feePercentOf } from '@/lib/settings';
 import type { SendTx } from '@/lib/types';
 
@@ -14,6 +14,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ action: st
   const op = action[0];
   const body = await req.json().catch(() => ({}));
   const settings = await getSettings();
+
+  // عملیات روی حساب صاحب توکن API فقط برای مدیر
+  if (['cancel', 'rent-out', 'update-settings'].includes(op)) {
+    const denied = await requireAdminJson();
+    if (denied) return denied;
+  }
 
   try {
     // پرداخت اجاره
@@ -131,6 +137,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ action: str
 
   try {
     if (op === 'my') {
+      // اجاره‌های حساب صاحب توکن API → فقط مدیر
+      const denied = await requireAdminJson();
+      if (denied) return denied;
       const r = await maFetch<{ items?: unknown[] }>('/v1/rent/my-rented/', { query: { limit: 50 } });
       return Response.json({ items: r.body?.items || [] });
     }
