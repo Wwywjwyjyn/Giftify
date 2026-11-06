@@ -26,23 +26,28 @@ model Setting {
 }
 
 model Order {
-  id        String   @id @default(cuid())
-  userId    Int?
-  kind      String // stars | premium | ads | telegram_topup | nft | rent
+  id        String    @id @default(cuid())
+  userId    Int? // خریدار / اجاره‌گیرنده
+  kind      String // stars | premium | ads | telegram_topup | nft | rent | local_buy | local_rent
   title     String
   amountTon Float // مبلغ اصلی (TON)
-  feeTon    Float    @default(0) // کارمزد سایت (شفاف ثبت می‌شود)
-  currency  String   @default("TON")
-  status    String   @default("PENDING_TX") // PENDING_TX | TX_SENT | DONE | FAILED
-  meta      String   @default("{}")
+  feeTon    Float     @default(0) // کارمزد سایت (شفاف ثبت می‌شود)
+  currency  String    @default("TON")
+  status    String    @default("PENDING_TX") // PENDING_TX | TX_SENT | AWAITING_DELIVERY | DELIVERED | DONE | FAILED | CANCELLED | RENT_ACTIVE | RENT_OVERDUE
+  meta      String    @default("{}")
   txHash    String?
-  createdAt DateTime @default(now())
+  payMethod String? // wallet | ton
+  nftAddress String? // برای تحویل/بازگشت واقعی NFT
+  sellerWallet String? // فروشندهٔ لیستینگ محلی
+  endAt     DateTime? // پایان دورهٔ اجاره
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 model FeeRecord {
   id        String   @id @default(cuid())
   orderId   String?
-  section   String // usernames | numbers | gifts | rent | stars | premium | giveaway | ads
+  section   String // usernames | numbers | gifts | rent | stars | premium | giveaway | ads | deposit
   amountTon Float
   wallet    String // کیف پول کارمزد (ادمین)
   status    String   @default("PENDING") // PENDING | PAID
@@ -69,6 +74,7 @@ model LocalListing {
   name           String
   collectionSlug String?
   itemNum        Int?
+  nftAddress     String? // اگر آیتم واقعاً روی زنجیره است — برای تحویل/بازگشت با تراکنش واقعی
   priceTon       Float?
   rentPerDayTon  Float?
   rentMinDays    Int?
@@ -93,4 +99,32 @@ model RentCache {
   attrs          String   @default("[]")
   listedAt       Int?
   updatedAt      DateTime @updatedAt
+}
+
+/**
+ * کیف پول داخلی سایت — موجودی گرام (TON) هر کاربر.
+ * واریز: کاربر TON به کیف واریز ادمین (deposit_wallet) با کد یادمان می‌فرستد.
+ * هزینه‌کرد: خرید/اجاره/استارز/پرمیوم از همین موجودی.
+ */
+model WalletAccount {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @unique
+  memoCode   String   @unique // کد یادمان واریز — مثل GFT-4X7K9
+  balanceTon Float    @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+/** دفتر تراکنش‌های کیف پول داخلی — هر تغییر موجودی یک ردیف */
+model WalletTx {
+  id           String   @id @default(cuid())
+  userId       Int
+  type         String // DEPOSIT | SPEND | CREDIT | FEE | REFUND | HOLD | RELEASE
+  amountTon    Float // همیشه مثبت — جهت با type مشخص می‌شود
+  balanceAfter Float
+  orderId      String?
+  note         String   @default("")
+  txHash       String? @unique // هش تراکنش واریز (ضد دوبار شمارش)
+  meta         String   @default("{}")
+  createdAt    DateTime @default(now())
 }

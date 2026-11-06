@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Shield, Save, CheckCircle2 } from 'lucide-react';
+import { Shield, Save, CheckCircle2, Wallet2, PackageCheck, RotateCcw, XCircle } from 'lucide-react';
 import { faNum, fmtTon } from '@/lib/format';
 import { TonDiamond } from '@/components/ui-bits';
 
 type Settings = {
   site_name: string;
   fee_wallet: string;
+  deposit_wallet: string;
   fee_usernames: number;
   fee_numbers: number;
   fee_gifts: number;
@@ -16,12 +17,16 @@ type Settings = {
   fee_premium: number;
   fee_giveaway: number;
   fee_ads: number;
+  price_stars_per100: number;
+  price_premium_3m: number;
+  price_premium_6m: number;
+  price_premium_12m: number;
   notice: string;
 };
-type Order = { id: string; kind: string; title: string; amountTon: number; feeTon: number; status: string; createdAt: string };
+type Order = { id: string; kind: string; title: string; amountTon: number; feeTon: number; status: string; payMethod?: string | null; createdAt: string };
 type FeeRow = { id: string; section: string; amountTon: number; wallet: string; status: string; createdAt: string };
-type User = { id: number; role: string; wallet?: string; telegramId?: string; name?: string; createdAt: string };
-type Listing = { id: string; kind: string; name: string; priceTon?: number; rentPerDayTon?: number; status: string; ownerWallet: string };
+type User = { id: number; role: string; wallet?: string; telegramId?: string; name?: string; balanceTon?: number; createdAt: string };
+type Listing = { id: string; kind: string; name: string; priceTon?: number | null; rentPerDayTon?: number | null; status: string; ownerWallet: string; nftAddress?: string | null };
 type Health = { token_set?: boolean; token_valid?: boolean; sale_feed?: boolean; telegram?: boolean };
 
 const SECTIONS: { key: keyof Settings; label: string }[] = [
@@ -35,6 +40,12 @@ const SECTIONS: { key: keyof Settings; label: string }[] = [
   { key: 'fee_ads', label: 'تبلیغات' },
 ];
 
+const STATUS_FA: Record<string, string> = {
+  PENDING_TX: 'در انتظار پرداخت', TX_SENT: 'پرداخت شد', AWAITING_DELIVERY: 'در صف تحویل',
+  DELIVERED: 'تحویل شد', DONE: 'تکمیل شد', FAILED: 'ناموفق', REFUNDED: 'برگشت مبلغ',
+  RENT_ACTIVE: 'اجاره فعال', RENT_OVERDUE: 'اجاره معوق', CANCELLED: 'لغو شد',
+};
+
 export function AdminInner() {
   const [tab, setTab] = useState<'fees' | 'orders' | 'users' | 'listings'>('fees');
   const [s, setS] = useState<Settings | null>(null);
@@ -45,7 +56,7 @@ export function AdminInner() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [health, setHealth] = useState<Health>({});
   const [denied, setDenied] = useState(false);
-  const [nf, setNf] = useState({ name: '', kind: 'gift', price: '', rent: '', min: '1', max: '30' });
+  const [nf, setNf] = useState({ name: '', kind: 'gift', price: '', rent: '', min: '1', max: '30', nft: '', owner: '' });
 
   const loadAll = useCallback(async () => {
     const sr = await fetch('/api/admin/settings', { cache: 'no-store' });
@@ -76,6 +87,20 @@ export function AdminInner() {
     setUsers((us) => us.map((x) => (x.id === u.id ? { ...x, role: x.role === 'ADMIN' ? 'USER' : 'ADMIN' } : x)));
   }
 
+  async function orderAction(id: string, action: 'deliver' | 'complete' | 'refund' | 'fail') {
+    await fetch('/api/admin/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action }) });
+    loadAll();
+  }
+
+  async function creditUser(u: User) {
+    const input = window.prompt(`شارژ دستی کیف پول کاربر ${u.wallet?.slice(0, 10)}… — مقدار TON:`);
+    if (!input) return;
+    const amount = Number(input.replace(/[^\d.]/g, ''));
+    if (!(amount > 0)) return;
+    await fetch('/api/admin/wallet-credit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: u.id, amountTon: amount, note: 'شارژ دستی پشتیبانی' }) });
+    loadAll();
+  }
+
   async function addListing() {
     if (!nf.name.trim()) return;
     await fetch('/api/admin/listings', {
@@ -83,12 +108,14 @@ export function AdminInner() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: nf.name, kind: nf.kind,
+        ownerWallet: nf.owner || undefined,
+        nftAddress: nf.nft || null,
         priceTon: nf.price ? Number(nf.price) : null,
         rentPerDayTon: nf.rent ? Number(nf.rent) : null,
         rentMinDays: Number(nf.min) || 1, rentMaxDays: Number(nf.max) || 30,
       }),
     });
-    setNf({ name: '', kind: nf.kind, price: '', rent: '', min: '1', max: '30' });
+    setNf({ name: '', kind: nf.kind, price: '', rent: '', min: '1', max: '30', nft: '', owner: '' });
     loadAll();
   }
 
@@ -107,6 +134,8 @@ export function AdminInner() {
   }
   if (!s) return <div className="flex justify-center py-20"><span className="spin" /></div>;
 
+  const awaiting = orders.filter((o) => ['AWAITING_DELIVERY', 'RENT_ACTIVE', 'RENT_OVERDUE'].includes(o.status));
+
   return (
     <div className="py-6">
       <h1 className="hero-title">پنل مدیریت گیفتیفای</h1>
@@ -114,17 +143,17 @@ export function AdminInner() {
       {/* وضعیت اتصال‌ها */}
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <div className="card p-4 text-sm">
-          <div className="text-muted">توکن API مارکت‌اپ</div>
-          <div className={`mt-1 font-bold ${health.token_valid ? 'text-ok' : 'text-bad'}`}>
-            {!health.token_set ? 'تنظیم نشده ✗' : health.token_valid ? 'فعال ✓' : 'نامعتبر/منقضی ✗'}
+          <div className="text-muted">سرویس بازار جهانی (مارکت‌اپ)</div>
+          <div className={`mt-1 font-bold ${health.token_valid ? 'text-ok' : 'text-muted'}`}>
+            {!health.token_set ? 'تنظیم نشده' : health.token_valid ? 'فعال ✓' : 'موقتاً محدود'}
           </div>
           {health.token_set && !health.token_valid && (
-            <div className="mt-1 text-[11px] leading-5 text-muted">توکن جدید از marketapp.org/api-token بگیرید و در .env جایگزین کنید</div>
+            <div className="mt-1 text-[11px] leading-5 text-muted">با فعال‌سازی، فید جهانی اجاره/خرید هم به بازار اضافه می‌شود</div>
           )}
         </div>
         <div className="card p-4 text-sm">
           <div className="text-muted">فید خرید NFT (پلن API)</div>
-          <div className={`mt-1 font-bold ${health.sale_feed ? 'text-ok' : 'text-[#FBBF24]'}`}>{health.sale_feed ? 'فعال ✓' : 'نیازمند پلن'}</div>
+          <div className={`mt-1 font-bold ${health.sale_feed ? 'text-ok' : 'text-muted'}`}>{health.sale_feed ? 'فعال ✓' : 'نیازمند پلن'}</div>
         </div>
         <div className="card p-4 text-sm">
           <div className="text-muted">ربات تلگرام (Mini App)</div>
@@ -133,9 +162,9 @@ export function AdminInner() {
       </div>
 
       {/* تب‌ها */}
-      <div className="mt-6 flex gap-6 border-b border-line">
-        {([['fees', 'کارمزدها'], ['orders', 'سفارش‌ها و کارمزد'], ['users', 'کاربران'], ['listings', 'لیستینگ محلی']] as const).map(([k, l]) => (
-          <button key={k} className={`tab ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>{l}</button>
+      <div className="mt-6 flex gap-6 overflow-x-auto border-b border-line">
+        {([['fees', 'تنظیمات'], ['orders', 'سفارش‌ها'], ['users', 'کاربران'], ['listings', 'لیستینگ محلی']] as const).map(([k, l]) => (
+          <button key={k} className={`tab whitespace-nowrap ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
 
@@ -145,7 +174,17 @@ export function AdminInner() {
             <label className="mb-2 block text-sm font-bold">کیف پول دریافت کارمزد (آدرس TON)</label>
             <input className="input" dir="ltr" placeholder="EQ… / UQ…" value={s.fee_wallet} onChange={(e) => setS({ ...s, fee_wallet: e.target.value })} />
             <p className="mt-2 text-xs leading-6 text-muted">
-              کارمزد هر بخش به این آدرس پرداخت و در «سفارش‌ها و کارمزد» به‌صورت شفاف ثبت می‌شود.
+              کارمزد هر بخش به این آدرس پرداخت و در «سفارش‌ها» شفاف ثبت می‌شود.
+            </p>
+          </div>
+
+          <div className="card p-5">
+            <label className="mb-2 block flex items-center gap-1.5 text-sm font-bold">
+              <Wallet2 size={15} className="text-ok" /> کیف واریز گرام کاربران (آدرس TON)
+            </label>
+            <input className="input" dir="ltr" placeholder="EQ… / UQ… — جدا از کیف کارمزد و کیف شخصی شما" value={s.deposit_wallet} onChange={(e) => setS({ ...s, deposit_wallet: e.target.value })} />
+            <p className="mt-2 text-xs leading-6 text-muted">
+              کاربران برای شارژ «کیف پول سایت» به این آدرس با کد یادمان خودشان واریز می‌کنند؛ پول خریدها همین‌جا جمع می‌شود و فقط کیف کارمزد جداگانه کارمزد را می‌گیرد.
             </p>
           </div>
 
@@ -167,6 +206,31 @@ export function AdminInner() {
           </div>
 
           <div className="card p-5">
+            <div className="mb-1 text-sm font-bold">قیمت‌های استارز و پرمیوم (TON)</div>
+            <div className="mb-3 text-xs leading-5 text-muted">
+              اگر سرویس بازار جهانی فعال باشد قیمت لحظه‌ای نمایش داده می‌شود؛ در غیر این صورت این تعرفه‌ها مبناست — هر وقت خواستید به‌روز کنید.
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div>
+                <label className="mb-1 block text-xs text-muted">هر ۱۰۰ استارز</label>
+                <input className="input py-2" inputMode="decimal" value={String(s.price_stars_per100)} onChange={(e) => setS({ ...s, price_stars_per100: Number(e.target.value.replace(/[^\d.]/g, '')) || 0 })} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted">پرمیوم ۳ ماه</label>
+                <input className="input py-2" inputMode="decimal" value={String(s.price_premium_3m)} onChange={(e) => setS({ ...s, price_premium_3m: Number(e.target.value.replace(/[^\d.]/g, '')) || 0 })} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted">پرمیوم ۶ ماه</label>
+                <input className="input py-2" inputMode="decimal" value={String(s.price_premium_6m)} onChange={(e) => setS({ ...s, price_premium_6m: Number(e.target.value.replace(/[^\d.]/g, '')) || 0 })} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted">پرمیوم ۱۲ ماه</label>
+                <input className="input py-2" inputMode="decimal" value={String(s.price_premium_12m)} onChange={(e) => setS({ ...s, price_premium_12m: Number(e.target.value.replace(/[^\d.]/g, '')) || 0 })} />
+              </div>
+            </div>
+          </div>
+
+          <div className="card p-5">
             <label className="mb-2 block text-sm font-bold">اعلان صفحه اصلی (اختیاری)</label>
             <input className="input" placeholder="مثلاً: خوش آمدید!" value={s.notice} onChange={(e) => setS({ ...s, notice: e.target.value })} />
           </div>
@@ -179,20 +243,58 @@ export function AdminInner() {
 
       {tab === 'orders' && (
         <div className="mt-6 space-y-6">
+          {awaiting.length > 0 && (
+            <div>
+              <h2 className="section-title mb-3">در صف تحویل ({faNum(awaiting.length)})</h2>
+              <div className="space-y-2">
+                {awaiting.map((o) => (
+                  <div key={o.id} className="card flex flex-wrap items-center justify-between gap-3 p-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-bold">{o.title}</div>
+                      <div className="mt-0.5 text-[11px] text-muted">
+                        {STATUS_FA[o.status] || o.status} — {o.payMethod === 'wallet' ? 'پرداخت با کیف پول سایت' : 'پرداخت با TON'} — {new Date(o.createdAt).toLocaleString('fa-IR')}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-sm font-bold tabular"><TonDiamond className="text-ton" /> {fmtTon(o.amountTon)}</span>
+                      <button className="btn-primary btn-sm" onClick={() => orderAction(o.id, 'deliver')} title="تحویل انجام شد">
+                        <PackageCheck size={13} /> تحویل شد
+                      </button>
+                      <button className="btn-ghost btn-sm" onClick={() => orderAction(o.id, 'complete')}>تکمیل</button>
+                      <button className="btn-ghost btn-sm" onClick={() => orderAction(o.id, 'refund')} title="بازگشت مبلغ به خریدار">
+                        <RotateCcw size={12} /> برگشت مبلغ
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div>
-            <h2 className="section-title mb-3">سفارش‌ها ({faNum(orders.length)})</h2>
+            <h2 className="section-title mb-3">همهٔ سفارش‌ها ({faNum(orders.length)})</h2>
             <div className="card overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="ftable min-w-[520px]">
-                  <thead><tr><th>نوع</th><th>عنوان</th><th>مبلغ</th><th>کارمزد</th><th>وضعیت</th><th>زمان</th></tr></thead>
+                <table className="ftable min-w-[560px]">
+                  <thead><tr><th>نوع</th><th>عنوان</th><th>مبلغ</th><th>کارمزد</th><th>پرداخت</th><th>وضعیت</th><th>زمان</th><th /></tr></thead>
                   <tbody>
                     {orders.map((o) => (
                       <tr key={o.id} className="cursor-default">
-                        <td>{o.kind}</td><td className="text-xs">{o.title}</td>
+                        <td className="text-xs">{o.kind}</td><td className="text-xs">{o.title}</td>
                         <td className="whitespace-nowrap"><TonDiamond className="text-ton" /> {fmtTon(o.amountTon)}</td>
                         <td className="whitespace-nowrap text-muted">{fmtTon(o.feeTon)}</td>
-                        <td className="text-xs">{o.status}</td>
+                        <td className="text-xs text-muted">{o.payMethod === 'wallet' ? 'کیف پول' : o.payMethod === 'ton' ? 'TON' : '—'}</td>
+                        <td className="text-xs">{STATUS_FA[o.status] || o.status}</td>
                         <td className="text-xs text-muted">{new Date(o.createdAt).toLocaleDateString('fa-IR')}</td>
+                        <td>
+                          {!['DONE', 'REFUNDED'].includes(o.status) && (
+                            <div className="flex gap-1">
+                              {o.status !== 'DELIVERED' && <button className="btn-ghost btn-sm" onClick={() => orderAction(o.id, 'deliver')} title="تحویل شد"><PackageCheck size={12} /></button>}
+                              <button className="btn-ghost btn-sm text-bad" onClick={() => orderAction(o.id, o.payMethod === 'wallet' ? 'refund' : 'fail')} title="لغو و برگشت">
+                                <XCircle size={12} />
+                              </button>
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -212,7 +314,7 @@ export function AdminInner() {
                       <tr key={f.id} className="cursor-default">
                         <td>{f.section}</td>
                         <td className="whitespace-nowrap"><TonDiamond className="text-ton" /> {fmtTon(f.amountTon)}</td>
-                        <td className="text-xs" dir="ltr">{f.wallet.slice(0, 8)}…</td>
+                        <td className="text-xs" dir="ltr">{f.wallet.startsWith('(') ? f.wallet : `${f.wallet.slice(0, 8)}…`}</td>
                         <td className={`text-xs font-bold ${f.status === 'PAID' ? 'text-ok' : 'text-[#FBBF24]'}`}>{f.status === 'PAID' ? 'پرداخت شد' : 'در انتظار'}</td>
                         <td>
                           {f.status === 'PENDING' && (
@@ -235,17 +337,25 @@ export function AdminInner() {
       {tab === 'users' && (
         <div className="card mt-6 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="ftable min-w-[520px]">
-              <thead><tr><th>#</th><th>کیف پول</th><th>تلگرام</th><th>نقش</th><th>تاریخ عضویت</th><th /></tr></thead>
+            <table className="ftable min-w-[560px]">
+              <thead><tr><th>#</th><th>کیف پول</th><th>تلگرام</th><th>موجودی سایت</th><th>نقش</th><th>عضویت</th><th /></tr></thead>
               <tbody>
                 {users.map((u) => (
                   <tr key={u.id} className="cursor-default">
                     <td>{faNum(u.id)}</td>
                     <td className="text-xs" dir="ltr">{u.wallet ? `${u.wallet.slice(0, 8)}…` : '—'}</td>
                     <td className="text-xs" dir="ltr">{u.telegramId || '—'}</td>
+                    <td className="whitespace-nowrap text-xs tabular">{u.balanceTon != null ? `${fmtTon(u.balanceTon)} TON` : '—'}</td>
                     <td className={`text-xs font-bold ${u.role === 'ADMIN' ? 'text-ok' : 'text-muted'}`}>{u.role === 'ADMIN' ? 'مدیر' : 'کاربر'}</td>
                     <td className="text-xs text-muted">{new Date(u.createdAt).toLocaleDateString('fa-IR')}</td>
-                    <td><button className="btn-ghost btn-sm" onClick={() => toggleRole(u)}>{u.role === 'ADMIN' ? 'سلب مدیریت' : 'ارتقا به مدیر'}</button></td>
+                    <td>
+                      <div className="flex gap-1">
+                        <button className="btn-ghost btn-sm" onClick={() => creditUser(u)} title="شارژ دستی کیف پول">
+                          <Wallet2 size={12} />
+                        </button>
+                        <button className="btn-ghost btn-sm" onClick={() => toggleRole(u)}>{u.role === 'ADMIN' ? 'سلب مدیریت' : 'ارتقا به مدیر'}</button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -257,7 +367,7 @@ export function AdminInner() {
       {tab === 'listings' && (
         <div className="mt-6 max-w-2xl space-y-5">
           <div className="card space-y-3 p-5">
-            <div className="text-sm font-bold">افزودن لیستینگ محلی (آیتم‌های خودتان)</div>
+            <div className="text-sm font-bold">افزودن لیستینگ محلی (آیتم‌های سایت)</div>
             <div className="grid gap-3 sm:grid-cols-2">
               <input className="input" placeholder="نام — مثلاً @myname یا Toy Bear #123" value={nf.name} onChange={(e) => setNf({ ...nf, name: e.target.value })} />
               <select className="input" value={nf.kind} onChange={(e) => setNf({ ...nf, kind: e.target.value })}>
@@ -265,6 +375,8 @@ export function AdminInner() {
                 <option value="username">یوزرنیم</option>
                 <option value="number">شماره</option>
               </select>
+              <input className="input" dir="ltr" placeholder="کیف پول فروشنده (EQ…/UQ…)" value={nf.owner} onChange={(e) => setNf({ ...nf, owner: e.target.value })} />
+              <input className="input" dir="ltr" placeholder="آدرس NFT روی زنجیره (اختیاری، برای تحویل واقعی)" value={nf.nft} onChange={(e) => setNf({ ...nf, nft: e.target.value })} />
               <input className="input" placeholder="قیمت خرید (TON)" value={nf.price} onChange={(e) => setNf({ ...nf, price: e.target.value })} inputMode="decimal" />
               <input className="input" placeholder="اجاره هر روز (TON)" value={nf.rent} onChange={(e) => setNf({ ...nf, rent: e.target.value })} inputMode="decimal" />
               <input className="input" placeholder="حداقل روز اجاره" value={nf.min} onChange={(e) => setNf({ ...nf, min: e.target.value })} inputMode="numeric" />
@@ -276,7 +388,7 @@ export function AdminInner() {
           <div className="card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="ftable min-w-[520px]">
-                <thead><tr><th>نام</th><th>نوع</th><th>قیمت خرید</th><th>اجاره/روز</th><th>وضعیت</th><th /></tr></thead>
+                <thead><tr><th>نام</th><th>نوع</th><th>قیمت خرید</th><th>اجاره/روز</th><th>NFT</th><th>وضعیت</th><th /></tr></thead>
                 <tbody>
                   {listings.map((l) => (
                     <tr key={l.id} className="cursor-default">
@@ -284,6 +396,7 @@ export function AdminInner() {
                       <td className="text-xs text-muted">{l.kind === 'gift' ? 'گیفت' : l.kind === 'username' ? 'یوزرنیم' : 'شماره'}</td>
                       <td>{l.priceTon ? fmtTon(l.priceTon) : '—'}</td>
                       <td>{l.rentPerDayTon ? fmtTon(l.rentPerDayTon) : '—'}</td>
+                      <td className="text-xs text-muted">{l.nftAddress ? '✓' : '—'}</td>
                       <td className="text-xs">{l.status === 'ACTIVE' ? 'فعال' : 'غیرفعال'}</td>
                       <td><button className="btn-ghost btn-sm text-bad" onClick={() => delListing(l.id)}>حذف</button></td>
                     </tr>

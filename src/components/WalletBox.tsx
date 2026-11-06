@@ -3,15 +3,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTonConnectUI, useTonAddress } from '@tonconnect/ui-react';
 import Link from 'next/link';
-import { Shield, LogOut } from 'lucide-react';
+import { Shield, LogOut, Wallet2 } from 'lucide-react';
 
 type Me = { id: number; role: 'ADMIN' | 'USER'; name?: string | null; wallet?: string | null; telegramId?: string | null } | null;
 
-/** جعبه ورود: اتصال کیف پول + ورود خودکار داخل تلگرام (Mini App) */
+/** رویداد سراسری: بعد از هر خرید/واریز، موجودی هدر تازه شود */
+export function refreshWalletBadge() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('giftify:wallet-refresh'));
+}
+
+/** جعبه ورود: اتصال کیف پول + موجودی سایت + ورود خودکار داخل تلگرام (Mini App) */
 export function WalletBox() {
   const [tonConnectUI] = useTonConnectUI();
   const address = useTonAddress();
   const [me, setMe] = useState<Me>(null);
+  const [balance, setBalance] = useState<number | null>(null);
   const busy = useRef(false);
   const tgDone = useRef(false);
 
@@ -25,9 +31,26 @@ export function WalletBox() {
     }
   }, []);
 
+  const loadBalance = useCallback(async () => {
+    try {
+      const r = await fetch('/api/wallet', { cache: 'no-store' });
+      const j = await r.json();
+      setBalance(j.wallet ? j.wallet.balanceTon : null);
+    } catch {
+      /* بی‌اهمیت */
+    }
+  }, []);
+
   useEffect(() => {
     loadMe();
-    // ورود خودکار داخل تلگرام Mini App
+    loadBalance();
+    const onR = () => loadBalance();
+    window.addEventListener('giftify:wallet-refresh', onR);
+    return () => window.removeEventListener('giftify:wallet-refresh', onR);
+  }, [loadMe, loadBalance]);
+
+  // ورود خودکار داخل تلگرام Mini App
+  useEffect(() => {
     const tg = (window as unknown as { Telegram?: { WebApp?: { initData?: string; ready?: () => void; expand?: () => void } } }).Telegram?.WebApp;
     if (tg?.initData && !tgDone.current) {
       tgDone.current = true;
@@ -62,6 +85,7 @@ export function WalletBox() {
         });
         const j = await r.json();
         setMe(j.user ?? null);
+        loadBalance();
       } catch {
         /* در لود بعدی دریافت می‌شود */
       } finally {
@@ -69,7 +93,7 @@ export function WalletBox() {
       }
     });
     return () => off();
-  }, [tonConnectUI]);
+  }, [tonConnectUI, loadBalance]);
 
   async function onWalletClick() {
     if (address || me?.wallet) {
@@ -85,10 +109,22 @@ export function WalletBox() {
   const label = me?.wallet || address ? `${short.slice(0, 4)}…${short.slice(-4)}` : 'اتصال کیف پول';
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       {me?.role === 'ADMIN' && (
         <Link href="/admin" className="hidden items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-xs text-muted hover:text-accent sm:flex">
           <Shield size={13} /> مدیریت
+        </Link>
+      )}
+      {/* موجودی کیف پول داخلی */}
+      {balance !== null && (
+        <Link
+          href="/wallet"
+          className="flex items-center gap-1 rounded-md border border-accent/40 bg-accent/10 px-2 py-1.5 text-xs font-bold text-accent-hi transition-colors hover:border-accent"
+          title="کیف پول سایت — موجودی گرام"
+        >
+          <Wallet2 size={13} />
+          <span className="tabular">{balance.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
+          <span className="text-[10px] opacity-75">TON</span>
         </Link>
       )}
       <button onClick={onWalletClick} className="btn-primary btn-sm" title={short || undefined}>

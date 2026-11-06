@@ -75,9 +75,10 @@ export default async function ItemPage({ params }: { params: Promise<{ address: 
   if (!info.ok && info.tokenInvalid) {
     return (
       <div className="card mx-auto mt-10 max-w-md p-8 text-center text-sm leading-7">
-        توکن API مارکت‌اپ نامعتبر یا منقضی است. از <span dir="ltr" className="font-bold">marketapp.org/api-token</span> توکن جدید بگیرید و در <span dir="ltr" className="font-bold">.env</span> جایگزین کنید.
-        <div className="mt-4">
-          <Link href="/gifts" className="btn-ghost">بازگشت به بازار</Link>
+        این آیتم موقتاً در دسترس نیست — چند لحظه بعد دوباره تلاش کنید یا از بازار استفاده کنید.
+        <div className="mt-4 flex justify-center gap-2">
+          <Link href="/gifts" className="btn-primary btn-sm">بازار گیفت‌ها</Link>
+          <Link href="/rent" className="btn-ghost btn-sm">بخش اجاره</Link>
         </div>
       </div>
     );

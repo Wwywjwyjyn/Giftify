@@ -26,13 +26,14 @@ export function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-[#04070A]/92 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-3 sm:px-5">
-        {/* لوگوی نستعلیق مثل فرگمنت */}
+        {/* لوگو — نستعلیق فارسی + لاتین شکسته مثل فرگمنت */}
         <Link href="/" className="flex shrink-0 items-center gap-2">
           <svg viewBox="0 0 64 64" className="h-6 w-6 shrink-0">
             <path d="M32 6 L56 22 L32 58 L8 22 Z" fill="#1691C4" />
             <path d="M32 6 L56 22 L32 32 L8 22 Z" fill="#1BA6DC" />
           </svg>
           <span className="logo-nasta text-2xl text-ink">گیفتیفای</span>
+          <span className="logo-script hidden text-xl text-accent-hi/90 sm:inline" dir="ltr">Giftify</span>
         </Link>
 
         <nav className="hidden flex-1 items-center gap-5 md:flex">

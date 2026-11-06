@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export type PayCurrency = 'GRAM' | 'TON' | 'USDT';
 
-/** انتخاب روش پرداخت مثل فرگمنت (GRAM/TON/USDT — واحد نیتروز خود مارکت‌اپ) */
+/** انتخاب روش پرداخت (واحد نمایشی مارکت‌اپ) */
 export function PaymentMethod({ value, onChange }: { value: PayCurrency; onChange: (c: PayCurrency) => void }) {
   const opts: { key: PayCurrency; label: string }[] = [
     { key: 'GRAM', label: 'GRAM' },
@@ -29,12 +29,17 @@ export function PaymentMethod({ value, onChange }: { value: PayCurrency; onChang
   );
 }
 
-/** جستجوی گیرنده (یوزرنیم) با نمایش نام و عکس واقعی از API */
+/**
+ * جستجوی گیرنده (یوزرنیم) با نمایش نام و عکس واقعی — از t.me بدون نیاز به هیچ توکنی.
+ * endpoint باید /api/tg/resolve باشد.
+ */
 export function RecipientSearch({ endpoint, label, onFound }: { endpoint: string; label: string; onFound?: (username: string) => void }) {
   const [username, setUsername] = useState('');
   const [info, setInfo] = useState<{ photo?: string; name?: string } | null>(null);
   const [err, setErr] = useState('');
   const [checking, setChecking] = useState(false);
+  const foundRef = useRef(onFound);
+  foundRef.current = onFound;
 
   useEffect(() => {
     const u = username.replace(/^@/, '').trim();
@@ -52,16 +57,20 @@ export function RecipientSearch({ endpoint, label, onFound }: { endpoint: string
       })
         .then((r) => r.json())
         .then((j) => {
-          if (j.photo || j.name) {
+          if (j.ok && (j.photo || j.name)) {
             setInfo({ photo: j.photo, name: j.name });
             setErr('');
-            onFound?.(u);
+            foundRef.current?.(u);
+          } else if (j.photo || j.name) {
+            // سازگاری با پاسخ قدیمی
+            setInfo({ photo: j.photo, name: j.name });
+            foundRef.current?.(u);
           } else {
             setInfo(null);
-            setErr(j.detail || 'یافت نشد');
+            setErr(j.detail || 'این یوزرنیم پیدا نشد — درست نوشته شده؟');
           }
         })
-        .catch(() => setErr('خطا در جستجو'))
+        .catch(() => setErr('خطا در جستجو — دوباره تلاش کنید'))
         .finally(() => setChecking(false));
     }, 500);
     return () => clearTimeout(t);
@@ -85,7 +94,7 @@ export function RecipientSearch({ endpoint, label, onFound }: { endpoint: string
         <div className="mt-2 flex items-center gap-3 rounded-lg border border-ok/30 bg-ok/10 px-3 py-2">
           {info.photo ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={info.photo} alt="" className="h-9 w-9 rounded-full" />
+            <img src={info.photo} alt="" className="h-9 w-9 rounded-full" referrerPolicy="no-referrer" />
           ) : (
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-panel2 text-sm font-bold">{(info.name || '?').slice(0, 1)}</div>
           )}

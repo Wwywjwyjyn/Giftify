@@ -3,6 +3,7 @@ import { maFetch, isTokenInvalid, TOKEN_INVALID_FA } from './marketapp';
 import { kvGet, kvSet } from './kv';
 import { db } from './db';
 import { fromNano } from './format';
+import { SEED_GIFT_COLLECTIONS } from './seed-collections';
 import type { NFTItem, RentItem, Collection } from './types';
 
 export type Section = 'usernames' | 'numbers' | 'gifts';
@@ -47,8 +48,19 @@ export async function getCollections(kind: 'gifts' | 'all', force = false): Prom
     await kvSet(key, JSON.stringify(r.body));
     return r.body;
   }
+  // فال‌بک واقعی: ۱۲۰ کالکشن واقعی با آدرس روی زنجیره (دادهٔ ثبت‌شدهٔ مارکت‌اپ)
   const stale = await kvGet<Collection[]>(key, 30 * 24 * 3600 * 1000);
-  return stale || [];
+  if (stale && stale.length) return stale;
+  const seed: Collection[] = SEED_GIFT_COLLECTIONS.map((c) => ({
+    address: c.address,
+    name: c.name,
+    extra_data: {
+      items: c.items ?? null,
+      floor: c.floorNano ?? null,
+      rent_floor: c.rentFloorNano ?? null,
+    },
+  }));
+  return seed;
 }
 
 export async function getSpecialCollections(kind: 'usernames' | 'numbers'): Promise<Collection[]> {

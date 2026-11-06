@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { getSessionUser } from '@/lib/auth';
 
 /** تأیید ارسال تراکنش توسط کاربر (پس از امضای کیف پول) */
 export async function POST(req: NextRequest) {
@@ -9,10 +10,24 @@ export async function POST(req: NextRequest) {
     const order = await db.order.findUnique({ where: { id: orderId } });
     if (!order) return Response.json({ ok: false, detail: 'سفارش یافت نشد' }, { status: 404 });
 
+    // فقط صاحب سفارش و فقط برای سفارش در انتظار تراکنش
+    const me = await getSessionUser();
+    if (order.userId && order.userId !== me?.id) return Response.json({ ok: false, detail: 'دسترسی ندارید' }, { status: 403 });
+    if (order.status !== 'PENDING_TX') return Response.json({ ok: true });
+
     await db.order.update({ where: { id: orderId }, data: { status: 'TX_SENT' } });
 
-    // اگر کارمزد در تراکنش پرداخت شده (لیستینگ محلی)، ثبت پرداخت
-    if (order.meta.includes('local')) {
+    const meta = (() => {
+      try {
+        return JSON.parse(order.meta || '{}') as { local?: boolean; listingId?: string };
+      } catch {
+        return {} as { local?: boolean; listingId?: string };
+      }
+    })();
+
+    // لیستینگ محلی: بعد از فروش/اجاره از بازار برداشته شود + کارمزد همان تراکنش پرداخت شده است
+    if (meta.local && meta.listingId) {
+      await db.localListing.updateMany({ where: { id: meta.listingId, priceTon: { not: null } }, data: { status: 'INACTIVE' } }).catch(() => {});
       const fee = await db.feeRecord.findFirst({ where: { orderId } });
       if (fee) await db.feeRecord.update({ where: { id: fee.id }, data: { status: 'PAID' } });
     }

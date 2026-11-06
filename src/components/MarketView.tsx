@@ -53,6 +53,8 @@ export function MarketView(props: {
 
   const section = props.section;
 
+  const cacheKey = `giftify:feed:${section}:${col}:${sort}`;
+
   useEffect(() => {
     const kind = section;
     fetch(`/api/market/collections?kind=${kind}`)
@@ -63,26 +65,48 @@ export function MarketView(props: {
 
   const load = useCallback(
     async (nextCursor: string | null, replace: boolean) => {
-      if (replace) setLoading(true);
-      else setMore(true);
+      // نقاشی فوری از کش جلسه — بدون پرش لودینگ در برگشت‌ها (رفرش هر بار نداریم)
+      let painted = false;
+      if (replace && !nextCursor) {
+        try {
+          const raw = sessionStorage.getItem(cacheKey);
+          if (raw) {
+            const c = JSON.parse(raw) as { items: FeedItem[]; cursor: string | null };
+            if (Array.isArray(c.items) && c.items.length) {
+              setItems(c.items);
+              setCursor(c.cursor || null);
+              setLoading(false);
+              painted = true;
+            }
+          }
+        } catch { /* کش خراب — نادیده */ }
+      }
+      if (replace && !painted) setLoading(true);
+      else if (!replace) setMore(true);
       try {
         const ps = new URLSearchParams({ section, limit: '50' });
         if (nextCursor) ps.set('cursor', nextCursor);
         if (col) ps.set('collection', col);
         if (sort && sort !== 'recently_touch') ps.set('sort', sort);
-        const r = await fetch(`/api/market/feed?${ps.toString()}`, { cache: 'no-store' });
+        const r = await fetch(`/api/market/feed?${ps.toString()}`);
         const j = await r.json();
         setNotice(j.notice || '');
         setCursor(j.cursor || null);
-        setItems((prev) => (replace ? j.items || [] : [...prev, ...(j.items || [])]));
+        const merged = replace ? j.items || [] : undefined;
+        if (merged) {
+          setItems(merged);
+          try { sessionStorage.setItem(cacheKey, JSON.stringify({ items: merged, cursor: j.cursor || null })); } catch { /* پر */ }
+        } else {
+          setItems((prev) => [...prev, ...(j.items || [])]);
+        }
       } catch {
-        setNotice('خطا در دریافت داده');
+        setNotice('اتصال برقرار نشد — دوباره تلاش کنید');
       } finally {
         setLoading(false);
         setMore(false);
       }
     },
-    [section, col, sort],
+    [section, col, sort, cacheKey],
   );
 
   useEffect(() => {

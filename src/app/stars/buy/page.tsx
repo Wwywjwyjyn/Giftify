@@ -3,10 +3,11 @@
 import { Suspense, useEffect, useState } from 'react';
 import { Star } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { PaymentMethod, RecipientSearch, PayCurrency } from '@/components/Purchase';
+import { RecipientSearch } from '@/components/Purchase';
 import { usePurchase } from '@/components/usePurchase';
+import { refreshWalletBadge } from '@/components/WalletBox';
 import { TonDiamond } from '@/components/ui-bits';
-import { faNum } from '@/lib/format';
+import { faNum, fmtTon } from '@/lib/format';
 
 const PACKAGES = [50, 100, 350, 500, 1000, 2500, 5000, 15000, 50000, 100000];
 
@@ -14,10 +15,10 @@ function StarsBuyInner() {
   const sp = useSearchParams();
   const [qty, setQty] = useState<number>(Number(sp.get('qty')) || 50);
   const [custom, setCustom] = useState('');
-  const [price, setPrice] = useState<{ ton: number; gram: number; usd: number | null } | null>(null);
-  const [currency, setCurrency] = useState<PayCurrency>('TON');
+  const [priceTon, setPriceTon] = useState<number | null>(null);
+  const [priceSource, setPriceSource] = useState<string>('');
   const [username, setUsername] = useState('');
-  const [fee, setFee] = useState<{ percent: number; wallet: string }>({ percent: 0, wallet: '' });
+  const [fee, setFee] = useState({ percent: 0, wallet: '' });
   const { purchase, busy, error, success } = usePurchase();
 
   useEffect(() => {
@@ -25,42 +26,40 @@ function StarsBuyInner() {
   }, []);
 
   useEffect(() => {
-    setPrice(null);
+    setPriceTon(null);
     const t = setTimeout(() => {
-      fetch('/api/fragment/stars/price', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantity: qty }),
-      })
+      fetch(`/api/price?kind=stars&qty=${qty}`)
         .then((r) => r.json())
-        .then((j) => (j.ton !== undefined ? setPrice(j) : null))
+        .then((j) => {
+          if (j.ok && j.ton > 0) {
+            setPriceTon(j.ton);
+            setPriceSource(j.source);
+          }
+        })
         .catch(() => {});
-    }, 350);
+    }, 300);
     return () => clearTimeout(t);
   }, [qty]);
 
-  const amountTon = currency === 'TON' ? price?.ton ?? 0 : currency === 'GRAM' ? price?.gram ?? 0 : price?.ton ?? 0;
-  const feeTon = fee.percent > 0 ? (amountTon * fee.percent) / 100 : 0;
+  const feeTon = priceTon ? Math.round(((priceTon * fee.percent) / 100) * 1e9) / 1e9 : 0;
 
-  async function buy() {
-    if (!username.trim()) return alert('اول گیرنده را انتخاب کنید');
-    await purchase(
-      '/api/fragment/stars/buy',
-      { username: username.replace(/^@/, ''), quantity: qty, currency },
-      feeTon > 0 && fee.wallet
-        ? `کارمزد سایت: ${feeTon.toFixed(4)} TON (${fee.percent}٪) — پس از تراکنش اصلی، به کیف پول سایت پرداخت می‌شود`
-        : undefined,
-    );
+  async function buy(payWith: 'wallet' | 'ton') {
+    if (!username.trim()) return;
+    const r = await purchase('/api/order', { kind: 'stars', username: username.replace(/^@/, ''), qty, pay_with: payWith });
+    if (r.ok) refreshWalletBadge();
   }
 
   return (
     <div className="mx-auto max-w-xl py-6">
       <h1 className="hero-title">خرید تلگرام استارز</h1>
-      <p className="hero-sub mt-2">شارژ موجودی استارز برای خودتان یا دوستانتان — قیمت لحظه‌ای از فرگمنت.</p>
+      <p className="hero-sub mt-2">شارژ موجودی استارز برای خودتان یا دوستانتان — با پرداخت TON.</p>
 
       <div className="mt-8 space-y-6">
         <div className="card p-5">
-          <RecipientSearch endpoint="/api/fragment/stars/recipient" label="انتخاب گیرنده" onFound={(u) => setUsername(u)} />
+          <RecipientSearch endpoint="/api/tg/resolve" label="انتخاب گیرنده" onFound={setUsername} />
+          {username && (
+            <div className="mt-2 text-[11px] text-ok">گیرنده تأیید شد ✓</div>
+          )}
         </div>
 
         <div className="card p-5">
@@ -96,7 +95,9 @@ function StarsBuyInner() {
                 <span className="flex-1 font-bold">
                   ⭐ {faNum(p.toLocaleString('en-US'))} استارز
                 </span>
-                <span className="text-muted">{p === qty ? price ? fmtPrice(price, currency) : '…' : ''}</span>
+                <span className="text-muted tabular">
+                  {p === qty ? priceTon ? `${fmtTon(priceTon)} TON` : '…' : ''}
+                </span>
               </label>
             ))}
           </div>
@@ -107,42 +108,51 @@ function StarsBuyInner() {
           </div>
         </div>
 
-        <div className="card p-5">
-          <label className="mb-2 block text-sm font-bold">روش پرداخت</label>
-          <PaymentMethod value={currency} onChange={setCurrency} />
-        </div>
-
         {/* شفافیت کارمزد */}
         {fee.percent > 0 && (
           <div className="rounded-lg border border-line bg-panel2 px-4 py-3 text-xs leading-6 text-muted">
-            کارمزد خدمات {fee.percent}٪ — مبلغ {feeTon > 0 ? `${feeTon.toFixed(4)} TON` : '—'} که پس از تراکنش اصلی، به کیف پول سایت پرداخت می‌شود.
+            کارمزد خدمات {faNum(fee.percent)}٪ — {feeTon > 0 ? `${feeTon.toFixed(4)} TON` : '—'} به‌صورت شفاف جدا از مبلغ اصلی محاسبه می‌شود.
           </div>
         )}
 
-        {price && (
+        {priceTon && (
           <div className="flex items-center justify-between rounded-lg border border-line bg-panel2 px-4 py-3">
             <span className="text-sm text-muted">مبلغ قابل پرداخت</span>
             <span className="font-bold">
-              <TonDiamond className="text-ton" /> {fmtPrice(price, currency)}
+              <TonDiamond className="text-ton" /> {fmtTon(priceTon)} TON
             </span>
           </div>
         )}
+        {priceSource === 'admin' && (
+          <div className="text-center text-[11px] text-muted">قیمت بر اساس تعرفهٔ سایت محاسبه شده است.</div>
+        )}
 
         {error && <div className="rounded-lg border border-bad/30 bg-bad/10 px-4 py-3 text-xs text-bad">{error}</div>}
-        {success && <div className="rounded-lg border border-ok/30 bg-ok/10 px-4 py-3 text-xs text-ok">{success}</div>}
+        {success && (
+          <div className="rounded-lg border border-ok/30 bg-ok/10 px-4 py-3 text-xs leading-6 text-ok">
+            {success}
+            <div className="mt-2 flex gap-2">
+              <a href="/inventory" className="btn-ghost btn-sm">پیگیری در انباری</a>
+              <a href="/wallet" className="btn-ghost btn-sm">کیف پول من</a>
+            </div>
+          </div>
+        )}
 
-        <button className="btn-primary w-full py-3.5" onClick={buy} disabled={busy || !price}>
-          {busy ? 'در حال پردازش…' : `خرید ${faNum(qty.toLocaleString('en-US'))} استارز`}
-        </button>
+        <div className="space-y-2">
+          <button className="btn-primary w-full py-3.5" onClick={() => buy('wallet')} disabled={busy || !priceTon || !username}>
+            {busy ? 'در حال پردازش…' : `خرید با کیف پول سایت${priceTon ? ` — ${fmtTon(priceTon)} TON` : ''}`}
+          </button>
+          <button className="btn-ghost w-full py-3" onClick={() => buy('ton')} disabled={busy || !priceTon || !username}>
+            {busy ? 'در حال پردازش…' : 'خرید با TON Connect'}
+          </button>
+          <div className="text-center text-[11px] leading-5 text-muted">
+            «کیف پول سایت» = موجودی گرام داخل سایت — سریع و بدون کارمزد شبکه.
+            <a href="/wallet" className="mx-1 text-accent-hi hover:underline">شارژ کیف پول</a>
+          </div>
+        </div>
       </div>
     </div>
   );
-}
-
-function fmtPrice(price: { ton: number; gram: number; usd: number | null }, currency: PayCurrency): string {
-  if (currency === 'USDT') return price.usd !== null ? `$${price.usd.toFixed(2)}` : '—';
-  if (currency === 'GRAM') return `${price.gram.toFixed(4)} GRAM`;
-  return `${price.ton.toFixed(4)} TON`;
 }
 
 export default function StarsBuyPage() {

@@ -7,6 +7,7 @@ export function Footer() {
         <Link href="/rent" className="hover:text-ink">اجاره‌های برتر</Link>
         <Link href="/inventory" className="hover:text-ink">انباری من</Link>
         <Link href="/cart" className="hover:text-ink">سبد خرید</Link>
+        <Link href="/wallet" className="hover:text-ink">کیف پول</Link>
         <span>قوانین</span>
         <span>حریم خصوصی</span>
         <span className="flex items-center gap-1">
@@ -14,6 +15,21 @@ export function Footer() {
           <svg viewBox="0 0 24 24" className="h-3 w-3 text-ton" fill="currentColor"><path d="M12 2 22 9.5 12 22 2 9.5Z" /></svg>
           TON
         </span>
+      </div>
+      {/* پشتیبانی — پایین‌ترین بخش صفحه */}
+      <div className="border-t border-[#0d141d]">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-2 gap-y-1 px-4 py-4 text-center text-[11px] text-muted">
+          <span>پشتیبانی و پاسخ به کاربران:</span>
+          <a
+            href="https://t.me/ItsBenyaminM"
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-md border border-line bg-panel2 px-2 py-0.5 font-bold text-accent-hi transition-colors hover:border-accent"
+            dir="ltr"
+          >
+            @ItsBenyaminM
+          </a>
+        </div>
       </div>
     </footer>
   );

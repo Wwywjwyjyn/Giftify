@@ -20,7 +20,7 @@ export function isTokenInvalid(body: unknown): boolean {
 }
 
 export const TOKEN_INVALID_FA =
-  'توکن API مارکت‌اپ نامعتبر یا منقضی شده است. از marketapp.org/api-token توکن جدید بگیرید و در .env مقدار MARKETAPP_API_TOKEN را عوض کنید.';
+  'بخش اجارهٔ مارکت جهانی موقتاً در دسترس نیست — لیستینگ‌های همین سایت کاملاً فعال‌اند و می‌توانید همین حالا بخرید و اجاره کنید.';
 
 export async function maFetch<T>(
   path: string,

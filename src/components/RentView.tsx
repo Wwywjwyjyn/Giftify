@@ -34,14 +34,30 @@ export function RentView() {
   const [notice, setNotice] = useState('');
 
   const load = useCallback(async () => {
-    setLoading(true);
+    // نقاشی فوری از کش جلسه — بدون پرش لودینگ در برگشت‌ها
+    const ck = `giftify:rent:${cat}`;
+    let painted = false;
     try {
-      const r = await fetch(`/api/market/feed?section=${cat}&limit=60`, { cache: 'no-store' });
+      const raw = sessionStorage.getItem(ck);
+      if (raw) {
+        const c = JSON.parse(raw);
+        if (Array.isArray(c.items) && c.items.length) {
+          setItems(c.items);
+          setNotice(c.notice || '');
+          setLoading(false);
+          painted = true;
+        }
+      }
+    } catch { /* کش خراب */ }
+    if (!painted) setLoading(true);
+    try {
+      const r = await fetch(`/api/market/feed?section=${cat}&limit=60`);
       const j = await r.json();
       setItems(j.items || []);
       setNotice(j.notice || '');
+      try { sessionStorage.setItem(ck, JSON.stringify({ items: j.items || [], notice: j.notice || '' })); } catch { /* پر */ }
     } catch {
-      setNotice('خطا در دریافت فید اجاره');
+      setNotice('اتصال برقرار نشد — دوباره تلاش کنید');
     } finally {
       setLoading(false);
     }

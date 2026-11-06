@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ShoppingBasket } from 'lucide-react';
+import { ShoppingBasket, KeyRound, Wallet2 } from 'lucide-react';
 import { usePurchase } from './usePurchase';
 import { TonDiamond } from './ui-bits';
 import { fmtTon, faNum } from '@/lib/format';
@@ -11,10 +11,11 @@ import { useCart } from './CartProvider';
 type Attr = { trait_type: string; value: string | number };
 
 /**
- * اکشن‌های آیتم:
- *  - اجاره کردن: پنل انتخاب مدت + پرداخت واقعی با TON Connect (endpoint رایگان مارکت‌اپ)
- *  - خرید: فقط برای لیستینگ‌های سایت (پرداخت مستقیم به فروشنده + کارمزد شفاف)
- *  - سبد خرید: افزودن خریدِ لیستینگ سایت
+ * اکشن‌های آیتم — همهٔ حالت‌ها واقعی و کارا:
+ *  - اجارهٔ لیستینگ سایت: کیف پول داخلی (امانی) یا TON Connect (مستقیم)
+ *  - خرید لیستینگ سایت: کیف پول داخلی یا TON Connect (فروشنده + کارمزد در یک تراکنش)
+ *  - خرید NFT روی زنجیره: تراکنش واقعی به قرارداد فروش فرگمنت
+ *  - اجارهٔ مارکت‌اپ: تراکنش رسمی اجاره
  */
 export function ItemActions(props: {
   kind: 'usernames' | 'numbers' | 'gifts';
@@ -34,38 +35,55 @@ export function ItemActions(props: {
   const [days, setDays] = useState<number>(
     props.minDurationSec ? Math.max(1, Math.round(props.minDurationSec / 86400)) : 1,
   );
+  const [fee, setFee] = useState({ percent: 0, wallet: '' });
+  const isLocal = !!props.local;
+  const isOnchain = !isLocal && !!props.address;
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((j) => setFee({ percent: isLocal ? (j.fee_gifts ?? 0) : (j.fee_rent ?? j.fee_gifts ?? 0), wallet: j.fee_wallet }))
+      .catch(() => {});
+  }, [isLocal]);
 
   const minDays = props.minDurationSec ? Math.max(1, Math.round(props.minDurationSec / 86400)) : 1;
   const maxDays = props.maxDurationSec ? Math.max(minDays, Math.round(props.maxDurationSec / 86400)) : 30;
-  const rentTotal = (props.rentPerDayTon ?? 0) * days;
-  const [fee, setFee] = useState({ percent: 0, wallet: '' });
+  const rentTotal = Math.round((props.rentPerDayTon ?? 0) * days * 1e9) / 1e9;
+  const rentFee = Math.round(rentTotal * fee.percent) / 100;
 
-  async function loadFee() {
-    if (fee.percent) return;
-    try {
-      const j = await fetch('/api/settings').then((r) => r.json());
-      setFee({ percent: j.fee_rent ?? j.fee_gifts ?? 0, wallet: j.fee_wallet });
-    } catch { /* بی‌اهمیت */ }
+  async function buy(payWith: 'wallet' | 'ton') {
+    if (!props.priceTon) return;
+    await purchase('/api/market/buy', isLocal ? { local_id: props.local, pay_with: payWith } : { nft_address: props.address, pay_with: payWith });
   }
 
-  async function buy() {
-    if (!props.local) return;
-    await loadFee();
-    await purchase('/api/market/buy', { local_id: props.local });
-  }
-
-  async function rent() {
-    if (!props.rentPerDayTon || !props.address || props.address.startsWith('local:')) return;
-    await loadFee();
+  async function rent(payWith: 'wallet' | 'ton') {
+    if (!props.rentPerDayTon || !props.address) return;
     await purchase('/api/rent/pay', {
       nft_address: props.address,
       duration: days * 86400,
       price_per_day: String(Math.round((props.rentPerDayTon ?? 0) * 1e9)),
+      pay_with: payWith,
     });
   }
 
-  const inCart = props.local ? cart.has(`local:${props.local}`) : false;
-  const isLocalRent = props.local && props.rentPerDayTon;
+  const inCart = isLocal ? cart.has(`local:${props.local}`) : false;
+  const currency = props.currency || 'TON';
+
+  const payButtons = (onWallet: () => void, onTon: () => void, label: string, total: number) => (
+    <div className="mt-3 space-y-2">
+      <button className="btn-primary w-full py-3" onClick={onWallet} disabled={busy}>
+        <Wallet2 size={16} />
+        {busy ? 'در حال پردازش…' : `${label} با کیف پول سایت — ${fmtTon(total)} TON`}
+      </button>
+      <button className="btn-ghost w-full py-3" onClick={onTon} disabled={busy}>
+        {busy ? 'در حال پردازش…' : `${label} با TON Connect`}
+      </button>
+      <div className="text-center text-[11px] leading-5 text-muted">
+        «کیف پول سایت» = موجودی گرام داخل سایت — سریع و بدون کارمزد شبکه.
+        <Link href="/wallet" className="mx-1 text-accent-hi hover:underline">شارژ کیف پول</Link>
+      </div>
+    </div>
+  );
 
   return (
     <div className="mt-5 space-y-3">
@@ -73,14 +91,16 @@ export function ItemActions(props: {
       {props.rentPerDayTon ? (
         <div className="card p-4" id="rent">
           <div className="mb-2 flex items-center justify-between text-sm">
-            <span className="font-bold text-ok">اجاره کردن این آیتم</span>
+            <span className="font-bold text-ok">
+              <KeyRound size={15} className="me-1 inline align-[-2px]" /> اجاره کردن این آیتم
+            </span>
             <span className="text-muted tabular">
               <TonDiamond className="text-ton" /> {fmtTon(props.rentPerDayTon)} / روز
             </span>
           </div>
-          {isLocalRent && (
+          {isLocal && (
             <div className="mb-2 text-[11px] leading-5 text-muted">
-              اجارهٔ لیستینگ این سایت — پس از پرداخت، از طریق پشتیبانی سایت فعال می‌شود.
+              اجارهٔ لیستینگ همین سایت — پرداخت شما تا تحویل آیتم امانی نگه داشته می‌شود.
             </div>
           )}
           <div className="mb-2 text-xs text-muted">
@@ -104,46 +124,50 @@ export function ItemActions(props: {
           </div>
           {fee.percent > 0 && (
             <div className="mt-1.5 text-[11px] text-muted">
-              کارمزد سایت: {faNum(fee.percent)}٪ — شفاف و جدا از مبلغ اجاره ثبت می‌شود
+              کارمزد سایت {faNum(fee.percent)}٪ ({rentFee.toFixed(4)} TON) — شفاف و جدا ثبت می‌شود
             </div>
           )}
-          {!props.local && (
-            <button className="btn-rent mt-3 w-full py-2.5" onClick={rent} disabled={busy}>
-              {busy ? 'در حال پردازش…' : `پرداخت و اجاره — ${fmtTon(rentTotal)} TON`}
-            </button>
-          )}
-          {props.local && (
-            <button className="btn-rent mt-3 w-full py-2.5" onClick={rent} disabled={busy} title="اجارهٔ لیستینگ محلی پس از پرداخت تایید می‌شود">
-              {busy ? 'در حال پردازش…' : 'درخواست اجاره'}
-            </button>
-          )}
+          {payButtons(() => rent('wallet'), () => rent('ton'), 'پرداخت و اجاره', rentTotal)}
         </div>
       ) : null}
 
-      {/* خرید — فقط لیستینگ سایت */}
-      {props.local && props.priceTon ? (
+      {/* خرید — لیستینگ سایت یا NFT روی زنجیره */}
+      {props.priceTon ? (
         <div className="space-y-2">
-          <button className="btn-primary w-full py-3" onClick={buy} disabled={busy}>
-            {busy ? 'در حال پردازش…' : `خرید — ${fmtTon(props.priceTon)} ${props.currency || 'TON'}`}
-          </button>
-          <button
-            className="btn-ghost w-full py-2.5"
-            onClick={() =>
-              cart.add({
-                id: `local:${props.local}`,
-                source: 'local',
-                localId: props.local,
-                kind: props.kind,
-                name: props.name,
-                image: props.image,
-                priceTon: props.priceTon ?? 0,
-                attrs: props.attrs,
-              })
-            }
-            disabled={inCart}
-          >
-            <ShoppingBasket size={16} /> {inCart ? 'در سبد خرید هست ✓' : 'افزودن به سبد خرید'}
-          </button>
+          {isLocal ? (
+            <>
+              <div className="flex items-center justify-between rounded-lg border border-line bg-panel2 px-4 py-3 text-sm">
+                <span className="text-muted">قیمت خرید</span>
+                <span className="font-bold tabular"><TonDiamond className="text-ton" /> {fmtTon(props.priceTon)} {currency}</span>
+              </div>
+              {fee.percent > 0 && (
+                <div className="px-1 text-[11px] text-muted">
+                  کارمزد سایت {faNum(fee.percent)}٪ — در پرداخت TON همراه تراکنش، در پرداخت کیف پول جدا محاسبه می‌شود
+                </div>
+              )}
+            </>
+          ) : null}
+          {payButtons(() => buy('wallet'), () => buy('ton'), 'خرید', props.priceTon)}
+          {isLocal && (
+            <button
+              className="btn-ghost w-full py-2.5"
+              onClick={() =>
+                cart.add({
+                  id: `local:${props.local}`,
+                  source: 'local',
+                  localId: props.local,
+                  kind: props.kind,
+                  name: props.name,
+                  image: props.image,
+                  priceTon: props.priceTon ?? 0,
+                  attrs: props.attrs,
+                })
+              }
+              disabled={inCart}
+            >
+              <ShoppingBasket size={16} /> {inCart ? 'در سبد خرید هست ✓' : 'افزودن به سبد خرید'}
+            </button>
+          )}
         </div>
       ) : null}
 
@@ -151,8 +175,9 @@ export function ItemActions(props: {
       {success && (
         <div className="rounded-lg border border-ok/30 bg-ok/10 px-4 py-3 text-xs leading-6 text-ok">
           {success}
-          <div className="mt-2 flex gap-2">
+          <div className="mt-2 flex flex-wrap gap-2">
             <Link href="/inventory" className="btn-ghost btn-sm">مشاهده انباری</Link>
+            {!isLocal && <Link href="/wallet" className="btn-ghost btn-sm">کیف پول من</Link>}
           </div>
         </div>
       )}

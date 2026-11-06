@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { Trash2, ShoppingBasket } from 'lucide-react';
+import { Trash2, ShoppingBasket, Wallet2 } from 'lucide-react';
 import { useCart } from './CartProvider';
 import { usePurchase } from './usePurchase';
+import { refreshWalletBadge } from './WalletBox';
 import { ItemImage } from './ItemImage';
 import { fmtTon } from '@/lib/format';
 import { TonDiamond } from './ui-bits';
@@ -12,9 +13,12 @@ export default function CartView() {
   const cart = useCart();
   const { purchase, busy, error, success } = usePurchase();
 
-  async function buyOne(id: string, localId: string) {
-    const r = await purchase('/api/market/buy', { local_id: localId });
-    if (r.ok) cart.remove(id);
+  async function buyOne(id: string, localId: string, payWith: 'wallet' | 'ton') {
+    const r = await purchase('/api/market/buy', { local_id: localId, pay_with: payWith });
+    if (r.ok) {
+      cart.remove(id);
+      refreshWalletBadge();
+    }
   }
 
   if (cart.items.length === 0) {
@@ -59,8 +63,11 @@ export default function CartView() {
                 <TonDiamond className="text-ton" /> {fmtTon(it.priceTon)} TON
               </div>
               <div className="mt-1 flex items-center gap-1.5">
-                <button className="btn-primary btn-sm" onClick={() => buyOne(it.id, it.localId!)} disabled={busy}>
-                  خرید
+                <button className="btn-primary btn-sm" onClick={() => buyOne(it.id, it.localId!, 'wallet')} disabled={busy} title="خرید با کیف پول سایت">
+                  <Wallet2 size={13} /> خرید
+                </button>
+                <button className="btn-ghost btn-sm" onClick={() => buyOne(it.id, it.localId!, 'ton')} disabled={busy} title="خرید با TON Connect">
+                  TON
                 </button>
                 <button className="btn-ghost btn-sm px-2" onClick={() => cart.remove(it.id)} aria-label="حذف">
                   <Trash2 size={13} />
@@ -77,7 +84,9 @@ export default function CartView() {
           <span className="text-lg font-bold tabular"><TonDiamond className="text-ton" /> {fmtTon(cart.totalTon)} TON</span>
         </div>
         <p className="mt-2 text-[11px] leading-5 text-muted">
-          پرداخت هر آیتم یک تراکنش مستقل است: مبلغ به کیف پول فروشنده می‌رود و کارمزد سایت شفاف و جداگانه ثبت می‌شود.
+          «خرید» = پرداخت با موجودی کیف پول سایت (سریع و بدون کارمزد شبکه) — «TON» = پرداخت مستقیم با TON Connect.
+          هر آیتم یک تراکنش مستقل است و کارمزد سایت شفاف جدا ثبت می‌شود.
+          <Link href="/wallet" className="mx-1 text-accent-hi hover:underline">شارژ کیف پول</Link>
         </p>
         {error && <div className="mt-3 rounded-lg border border-bad/30 bg-bad/10 px-4 py-3 text-xs leading-6 text-bad">{error}</div>}
         {success && <div className="mt-3 rounded-lg border border-ok/30 bg-ok/10 px-4 py-3 text-xs leading-6 text-ok">{success}</div>}
