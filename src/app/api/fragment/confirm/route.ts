@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { getSessionUser } from '@/lib/auth';
 
 /** تأیید ارسال تراکنش توسط کاربر (پس از امضای کیف پول) */
 export async function POST(req: NextRequest) {
@@ -9,11 +8,6 @@ export async function POST(req: NextRequest) {
     if (!orderId) return Response.json({ ok: false, detail: 'orderId لازم است' }, { status: 400 });
     const order = await db.order.findUnique({ where: { id: orderId } });
     if (!order) return Response.json({ ok: false, detail: 'سفارش یافت نشد' }, { status: 404 });
-
-    // فقط صاحب سفارش و فقط برای سفارش در انتظار تراکنش
-    const me = await getSessionUser();
-    if (order.userId && order.userId !== me?.id) return Response.json({ ok: false, detail: 'دسترسی ندارید' }, { status: 403 });
-    if (order.status !== 'PENDING_TX') return Response.json({ ok: true });
 
     await db.order.update({ where: { id: orderId }, data: { status: 'TX_SENT' } });
 

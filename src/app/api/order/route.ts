@@ -4,8 +4,8 @@ import { getSessionUser } from '@/lib/auth';
 import { getSettings, feePercentOf } from '@/lib/settings';
 import { spendBalance, calcFee } from '@/lib/wallet';
 import { getStarsPriceTon, getPremiumPriceTon } from '@/lib/pricing';
-import { maFetch } from '@/lib/marketapp';
-import { fetchTelegramPage } from '@/lib/tgpage';
+import { maFetch, unwrapTx, maError } from '@/lib/marketapp';
+import { resolveRecipient } from '@/lib/recipient';
 import type { SendTx } from '@/lib/types';
 import { safeDetail } from '@/lib/errors';
 
@@ -26,11 +26,14 @@ export async function POST(req: NextRequest) {
     const username = String(body.username || '').replace(/^@/, '').replace(/[^A-Za-z0-9_]/g, '');
     if (!username || username.length < 3) return Response.json({ ok: false, detail: 'یوزرنیم گیرنده را درست وارد کنید' }, { status: 400 });
 
-    // گیرنده واقعی است؟ (از t.me)
-    const info = await fetchTelegramPage(username);
-    if (!info.exists) {
-      return Response.json({ ok: false, detail: 'این یوزرنیم در تلگرام پیدا نشد — دوباره بررسی کنید' }, { status: 404 });
+    // گیرندهٔ واقعی است؟ — منبع رسمی خرید (API مارکت‌اپ) + فال‌بک t.me
+    // هشدار شفاف وقتی یوزرنیم اکانت شخصی تشخیص داده نشود؛ رد قطعی فقط وقتی هیچ‌جا پیدا نشود
+    const rc = await resolveRecipient(username, kind);
+    if (!rc.ok) {
+      return Response.json({ ok: false, detail: rc.detail || 'این یوزرنیم در تلگرام پیدا نشد — دوباره بررسی کنید' }, { status: 404 });
     }
+    const recipientName = rc.name || '';
+    const recipientVerified = rc.verified;
 
     const qty = kind === 'stars' ? Math.max(50, Math.min(10_000_000, Number(body.qty || 0))) : 0;
     const months = kind === 'premium' ? (Number(body.months) || 3) : 0;
@@ -60,7 +63,7 @@ export async function POST(req: NextRequest) {
           currency: 'TON',
           status: 'AWAITING_DELIVERY',
           payMethod: 'wallet',
-          meta: JSON.stringify({ username, qty, months, recipient: info.title, section: kind }),
+          meta: JSON.stringify({ username, qty, months, recipient: recipientName, recipientVerified, section: kind }),
         },
       });
       if (feeTon > 0) {
@@ -76,12 +79,14 @@ export async function POST(req: NextRequest) {
     }
 
     // پرداخت با TON Connect — اگر مارکت‌اپ معتبر است تراکنش رسمی، وگرنه سفارش به کیف پذیرش سایت
-    const r = await maFetch<SendTx>(`/v1/fragment/${kind}/buy/`, {
+    // نکته: پاسخ خرید فرگمنت داخل فیلد transaction پیچیده می‌شود — unwrapTx باز می‌کند
+    const r = await maFetch<Record<string, unknown>>(`/v1/fragment/${kind}/buy/`, {
       method: 'POST',
-      body: kind === 'stars' ? { username, quantity: qty, currency: 'TON' } : { username, months, currency: 'TON' },
+      body: kind === 'stars' ? { username, quantity: qty, currency: 'GRAM' } : { username, months, currency: 'GRAM' },
     });
-    if (r.status === 200 && (r.body as SendTx)?.messages) {
-      const tx = r.body as SendTx;
+    const rtx = unwrapTx(r.body as Record<string, unknown> | null);
+    if (r.status === 200 && rtx && (rtx as { messages?: unknown[] }).messages) {
+      const tx = rtx as unknown as SendTx;
       const order = await db.order.create({
         data: {
           userId: user?.id ?? null,
@@ -92,13 +97,20 @@ export async function POST(req: NextRequest) {
           currency: 'TON',
           status: 'PENDING_TX',
           payMethod: 'ton',
-          meta: JSON.stringify({ username, qty, months, via: 'marketapp' }),
+          meta: JSON.stringify({ username, qty, months, recipient: recipientName, recipientVerified, via: 'marketapp' }),
         },
       });
       if (feeTon > 0 && settings.fee_wallet) {
         await db.feeRecord.create({ data: { orderId: order.id, section: kind, amountTon: feeTon, wallet: settings.fee_wallet, status: 'PENDING' } });
       }
       return Response.json({ ok: true, tx, orderId: order.id });
+    }
+    // خطای صریح خرید فرگمنت (مثلاً یوزرنیم کانال است) — شفاف به کاربر
+    if (r.status !== 0 && r.status !== 402 && r.body) {
+      const det = maError(r.body, '');
+      if (det && !/paid api plan/i.test(det)) {
+        return Response.json({ ok: false, detail: safeDetail(det) }, { status: 400 });
+      }
     }
 
     // بدون توکن: پرداخت TON مستقیم به کیف پذیرش سایت (deposit/merchant wallet) و ثبت سفارش تحویل
@@ -120,7 +132,7 @@ export async function POST(req: NextRequest) {
         currency: 'TON',
         status: 'PENDING_TX',
         payMethod: 'ton',
-        meta: JSON.stringify({ username, qty, months, via: 'direct' }),
+        meta: JSON.stringify({ username, qty, months, recipient: recipientName, recipientVerified, via: 'direct' }),
       },
     });
     if (feeTon > 0) {

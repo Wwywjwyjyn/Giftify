@@ -33,10 +33,10 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   fee_giveaway: 1,
   fee_ads: 0,
   // آخرین قیمت‌های واقعی ثبت‌شده از API فرگمنت — ادمین می‌تواند همیشه به‌روز کند
-  price_stars_per100: 1.132,
-  price_premium_3m: 9.05,
-  price_premium_6m: 12.07,
-  price_premium_12m: 21.88,
+  price_stars_per100: 1.4,
+  price_premium_3m: 11.19,
+  price_premium_6m: 14.92,
+  price_premium_12m: 27.06,
   notice: '',
 };
 

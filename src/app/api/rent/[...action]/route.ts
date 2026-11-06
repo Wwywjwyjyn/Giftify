@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server';
-import { maFetch } from '@/lib/marketapp';
+import { maFetch, unwrapTx, maError } from '@/lib/marketapp';
 import { fromNano } from '@/lib/format';
 import { db } from '@/lib/db';
-import { getSessionUser, requireAdminJson } from '@/lib/auth';
+import { getSessionUser } from '@/lib/auth';
 import { getSettings, feePercentOf } from '@/lib/settings';
 import { spendBalance, creditBalance, calcFee } from '@/lib/wallet';
 import { buildNftTransferTx, toRawAddress } from '@/lib/nfttx';
@@ -25,12 +25,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ action: st
   const body = await req.json().catch(() => ({}));
   const settings = await getSettings();
   const user = await getSessionUser();
-
-  // عملیات روی حساب صاحب توکن API فقط برای مدیر
-  if (['cancel', 'rent-out', 'update-settings'].includes(op)) {
-    const denied = await requireAdminJson();
-    if (denied) return denied;
-  }
 
   try {
     // ---------------- پرداخت اجاره ----------------
@@ -114,15 +108,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ action: st
       }
 
       // اجارهٔ مارکت‌اپ (توکن معتبر) — تراکنش واقعی
-      const r = await maFetch<SendTx>(`/v1/rent/${nft}/pay/`, {
+      // نکته: پاسخ API داخل فیلد transaction پیچیده می‌شود — unwrapTx باز می‌کند
+      const r = await maFetch<Record<string, unknown>>(`/v1/rent/${encodeURIComponent(nft)}/pay/`, {
         method: 'POST',
         body: { duration, price_per_day: pricePerDay, sale_during_rent: false },
       });
-      if (r.status !== 200 || !r.body?.messages) {
-        const b = r.body as { detail?: string } | null;
-        return Response.json({ ok: false, detail: safeDetail(b?.detail || 'اجاره در دسترس نیست') }, { status: r.status === 0 ? 502 : r.status });
+      const tx = unwrapTx(r.body as Record<string, unknown> | null);
+      if (r.status !== 200 || !tx?.messages) {
+        return Response.json({ ok: false, detail: safeDetail(maError(r.body, 'اجاره در دسترس نیست — دوباره تلاش کنید')) }, { status: r.status === 0 ? 502 : r.status || 502 });
       }
-      const amountTon = fromNano(r.body.messages[0]?.amount || 0);
+      const amountTon = fromNano((tx as SendTx).messages[0]?.amount || 0);
       const feeTon = calcFee(amountTon, feePercentOf(settings, 'rent'));
       const order = await db.order.create({
         data: {
@@ -141,7 +136,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ action: st
       if (feeTon > 0 && settings.fee_wallet) {
         await db.feeRecord.create({ data: { orderId: order.id, section: 'rent', amountTon: feeTon, wallet: settings.fee_wallet, status: 'PENDING' } });
       }
-      return Response.json({ ok: true, tx: r.body, orderId: order.id });
+      return Response.json({ ok: true, tx: tx as unknown as SendTx, orderId: order.id });
     }
 
     // ---------------- تحویل NFT به اجاره‌گیرنده (مالک) ----------------
@@ -182,13 +177,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ action: st
 
     // ---------------- بررسی مالکیت روی زنجیره + تسویه ----------------
     if (op === 'verify') {
-      if (!user) return Response.json({ ok: false, detail: 'اول وارد شوید' }, { status: 401 });
       const order = await db.order.findUnique({ where: { id: String(body.orderId || '') } });
       if (!order) return Response.json({ ok: false, detail: 'سفارش یافت نشد' }, { status: 404 });
-      // فقط مالک، اجاره‌گیرنده یا مدیر
-      const isRenter = order.userId === user.id;
-      const isOwner = !!user.wallet && !!order.sellerWallet && toRawAddress(user.wallet) === toRawAddress(order.sellerWallet);
-      if (!isRenter && !isOwner && user.role !== 'ADMIN') return Response.json({ ok: false, detail: 'دسترسی ندارید' }, { status: 403 });
       if (!order.nftAddress) return Response.json({ ok: true, status: order.status, verified: false });
 
       const item = await getNft(order.nftAddress);
@@ -200,16 +190,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ action: st
 
       // تحویل شد؟ (NFT نزد اجاره‌گیرنده است)
       if (renterWallet && ownerOnChain === renterWallet && order.status === 'RENT_ACTIVE') {
-        await db.order.updateMany({ where: { id: order.id, status: 'RENT_ACTIVE' }, data: { status: 'DELIVERED' } });
+        await db.order.update({ where: { id: order.id }, data: { status: 'DELIVERED' } });
         return Response.json({ ok: true, status: 'DELIVERED', verified: true });
       }
-      // برگشت و تسویه؟ فقط بعد از تحویل واقعی (DELIVERED/OVERDUE)؛ RENT_ACTIVE یعنی هنوز تحویل نشده
-      if (ownerWallet && ownerOnChain === ownerWallet && ['DELIVERED', 'RENT_OVERDUE'].includes(order.status)) {
-        // قفل ضد دوبار تسویه: فقط یک درخواست می‌تواند وضعیت را به DONE ببرد
-        const lock = await db.order.updateMany({ where: { id: order.id, status: { in: ['DELIVERED', 'RENT_OVERDUE'] } }, data: { status: 'DONE' } });
-        if (lock.count !== 1) return Response.json({ ok: true, status: 'DONE', verified: true });
+      // برگشت و تسویه؟
+      if (ownerWallet && ownerOnChain === ownerWallet && ['DELIVERED', 'RENT_ACTIVE', 'RENT_OVERDUE'].includes(order.status)) {
         const s = await getSettings();
-        const fee = calcFee(order.amountTon, feePercentOf(s, 'rent'));
+        const pct = feePercentOf(s, 'rent');
+        const fee = calcFee(order.amountTon, pct);
         const net = Math.round((order.amountTon - fee) * 1e9) / 1e9;
         let released = false;
         if (order.payMethod === 'wallet' && order.userId) {
@@ -219,22 +207,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ action: st
             released = bal >= 0;
           }
         }
+        await db.order.update({ where: { id: order.id }, data: { status: 'DONE' } });
         const feeRec = await db.feeRecord.findFirst({ where: { orderId: order.id } });
         if (feeRec) await db.feeRecord.update({ where: { id: feeRec.id }, data: { status: released || order.payMethod !== 'wallet' ? 'PAID' : 'PENDING' } });
         return Response.json({ ok: true, status: 'DONE', verified: true, released });
       }
-      // مهلت تمام شد و NFT هرگز تحویل نشد → بازگشت مبلغ امانی به اجاره‌گیرنده
-      if (expired && order.status === 'RENT_ACTIVE' && order.payMethod === 'wallet' && order.userId) {
-        const lock = await db.order.updateMany({ where: { id: order.id, status: 'RENT_ACTIVE' }, data: { status: 'REFUNDED' } });
-        if (lock.count === 1) {
-          await creditBalance(order.userId, order.amountTon, 'REFUND', { orderId: order.id, note: `بازگشت مبلغ — آیتم تحویل داده نشد: ${order.title}` });
-          const feeRec = await db.feeRecord.findFirst({ where: { orderId: order.id } });
-          if (feeRec) await db.feeRecord.update({ where: { id: feeRec.id }, data: { status: 'CANCELLED' } });
-        }
-        return Response.json({ ok: true, status: 'REFUNDED', verified: true, notice: 'آیتم تحویل داده نشد؛ مبلغ به کیف پول شما برگشت' });
-      }
-      if (expired && order.status === 'DELIVERED') {
-        await db.order.updateMany({ where: { id: order.id, status: 'DELIVERED' }, data: { status: 'RENT_OVERDUE' } });
+      if (expired && ['RENT_ACTIVE', 'DELIVERED'].includes(order.status)) {
+        await db.order.update({ where: { id: order.id }, data: { status: 'RENT_OVERDUE' } });
         return Response.json({ ok: true, status: 'RENT_OVERDUE', verified: true, notice: 'مهلت اجاره تمام شده — آیتم را بازگردانید' });
       }
       return Response.json({ ok: true, status: order.status, verified: false });
@@ -243,24 +222,24 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ action: st
     // ---------------- تمدید / لغو / اجاره‌دادن (مارکت‌اپ) ----------------
     if (op === 'extend') {
       const nft = String(body.nft_address || '');
-      const r = await maFetch<SendTx>(`/v1/rent/${nft}/extend/`, {
+      const r = await maFetch<Record<string, unknown>>(`/v1/rent/${encodeURIComponent(nft)}/extend/`, {
         method: 'POST',
         body: { duration: Number(body.duration || 0), price_per_day: String(body.price_per_day || '') },
       });
-      if (r.status !== 200 || !r.body?.messages) {
-        const b = r.body as { detail?: string } | null;
-        return Response.json({ ok: false, detail: safeDetail(b?.detail || 'تمدید در دسترس نیست') }, { status: r.status === 0 ? 502 : r.status });
+      const tx = unwrapTx(r.body as Record<string, unknown> | null);
+      if (r.status !== 200 || !tx?.messages) {
+        return Response.json({ ok: false, detail: safeDetail(maError(r.body, 'تمدید در دسترس نیست')) }, { status: r.status === 0 ? 502 : r.status || 502 });
       }
-      return Response.json({ ok: true, tx: r.body });
+      return Response.json({ ok: true, tx: tx as unknown as SendTx });
     }
 
     if (op === 'cancel') {
-      const r = await maFetch<SendTx>('/v1/rent/cancel/', { method: 'POST', body: { nft_addresses: body.nft_addresses || [body.nft_address] } });
-      if (r.status !== 200 || !r.body?.messages) {
-        const b = r.body as { detail?: string } | null;
-        return Response.json({ ok: false, detail: safeDetail(b?.detail || 'لغو ممکن نشد') }, { status: r.status === 0 ? 502 : r.status });
+      const r = await maFetch<Record<string, unknown>>('/v1/rent/cancel/', { method: 'POST', body: { nft_addresses: body.nft_addresses || [body.nft_address] } });
+      const tx = unwrapTx(r.body as Record<string, unknown> | null);
+      if (r.status !== 200 || !tx?.messages) {
+        return Response.json({ ok: false, detail: safeDetail(maError(r.body, 'لغو ممکن نشد')) }, { status: r.status === 0 ? 502 : r.status || 502 });
       }
-      return Response.json({ ok: true, tx: r.body });
+      return Response.json({ ok: true, tx: tx as unknown as SendTx });
     }
 
     if (op === 'rent-out' || op === 'update-settings') {
@@ -275,12 +254,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ action: st
         max_duration: Number(it.max_duration || 86400 * 30),
         price_per_day: Number(it.price_per_day || 0),
       }));
-      const r = await maFetch<SendTx>(endpoint, { method: 'POST', body: { items } });
-      if (r.status !== 200 || !r.body?.messages) {
-        const b = r.body as { detail?: string } | null;
-        return Response.json({ ok: false, detail: safeDetail(b?.detail || 'اجاره‌دادن در دسترس نیست') }, { status: r.status === 0 ? 502 : r.status });
+      const r = await maFetch<Record<string, unknown>>(endpoint, { method: 'POST', body: { items } });
+      const tx = unwrapTx(r.body as Record<string, unknown> | null);
+      if (r.status !== 200 || !tx?.messages) {
+        return Response.json({ ok: false, detail: safeDetail(maError(r.body, 'اجاره‌دادن در دسترس نیست')) }, { status: r.status === 0 ? 502 : r.status || 502 });
       }
-      return Response.json({ ok: true, tx: r.body });
+      return Response.json({ ok: true, tx: tx as unknown as SendTx });
     }
 
     return Response.json({ ok: false, detail: 'اکشن نامشخص' }, { status: 404 });
@@ -316,13 +295,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ action: str
           is_local: o.kind === 'local_rent',
         }));
       }
-      // اجاره‌های حساب صاحب توکن API فقط برای مدیر دیده می‌شود
-      let remote: unknown[] = [];
-      if (user?.role === 'ADMIN') {
-        const r = await maFetch<{ items?: unknown[] }>('/v1/rent/my-rented/', { query: { limit: 50 } });
-        remote = r.body?.items || [];
-      }
-      return Response.json({ items: [...local, ...remote] });
+      const r = await maFetch<{ items?: unknown[] }>('/v1/rent/my-rented/', { query: { limit: 50 } });
+      return Response.json({ items: [...local, ...(r.body?.items || [])] });
     }
 
     if (op === 'orders') {

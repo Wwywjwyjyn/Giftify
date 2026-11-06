@@ -40,7 +40,7 @@ export async function getStarsPriceTon(quantity: number): Promise<StarsPrice | n
 
   // ۲/۳) قیمت ادمین یا پیش‌فرض — مدل خطی بر مبنای قیمت هر ۱۰۰ استارز
   const s = await getSettings();
-  const per100 = s.price_stars_per100 > 0 ? s.price_stars_per100 : 1.132;
+  const per100 = s.price_stars_per100 > 0 ? s.price_stars_per100 : 1.4;
   const out: StarsPrice = { ton: Math.round(((qty / 100) * per100) * 1e9) / 1e9, source: 'admin' };
   memSet(key, out);
   return out;
@@ -55,12 +55,18 @@ export async function getPremiumPriceTon(months: number): Promise<PremiumPrice |
   const m = memGet<PremiumPrice>(key, 90_000);
   if (m) return m;
 
-  const r = await maFetch<{ ton?: number | string; price?: number | string }>(`/v1/fragment/premium/price/`, {
-    method: 'POST',
-    body: { duration: m2 },
-  });
+  // پاسخ واقعی API:  {"months3":{"ton":…,"gram":…,"usd":…},"months6":{…},"months12":{…}}
+  const r = await maFetch<{
+    months3?: { ton?: number | string; gram?: number | string };
+    months6?: { ton?: number | string; gram?: number | string };
+    months12?: { ton?: number | string; gram?: number | string };
+    ton?: number | string;
+    gram?: number | string;
+    price?: number | string;
+  }>(`/v1/fragment/premium/price/`, { method: 'POST', body: {} });
   if (r.status === 200 && r.body) {
-    const raw = r.body.ton ?? r.body.price;
+    const bucket = m2 === 3 ? r.body.months3 : m2 === 6 ? r.body.months6 : r.body.months12;
+    const raw = bucket?.ton ?? bucket?.gram ?? r.body.ton ?? r.body.gram ?? r.body.price;
     let ton = typeof raw === 'string' ? Number(raw) : raw;
     if (ton && ton > 1e6) ton = ton / 1e9;
     if (ton && ton > 0) {
@@ -72,7 +78,7 @@ export async function getPremiumPriceTon(months: number): Promise<PremiumPrice |
 
   const s = await getSettings();
   const base = m2 === 3 ? s.price_premium_3m : m2 === 6 ? s.price_premium_6m : s.price_premium_12m;
-  const fallback = m2 === 3 ? 9.05 : m2 === 6 ? 12.07 : 21.88;
+  const fallback = m2 === 3 ? 11.19 : m2 === 6 ? 14.92 : 27.06;
   const out: PremiumPrice = { ton: base > 0 ? base : fallback, source: 'admin' };
   memSet(key, out);
   return out;

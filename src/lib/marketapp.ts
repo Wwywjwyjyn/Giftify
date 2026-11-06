@@ -22,6 +22,31 @@ export function isTokenInvalid(body: unknown): boolean {
 export const TOKEN_INVALID_FA =
   'بخش اجارهٔ مارکت جهانی موقتاً در دسترس نیست — لیستینگ‌های همین سایت کاملاً فعال‌اند و می‌توانید همین حالا بخرید و اجاره کنید.';
 
+/**
+ * تمام اندپوینت‌های تراکنشی مارکت‌اپ — مثل rent/pay، rent/cancel، nfts/buy و
+ * fragment buy — پاسخ را داخل فیلد «transaction» برمی‌گردانند:
+ * {"transaction":{"validUntil":…,"messages":[…]}}
+ * این هِلپر پاسخ را یکدست می‌کند تا همه‌جا tx در دسترس باشد.
+ */
+export function unwrapTx<T extends Record<string, unknown>>(body: T | null): (T & { transaction?: never }) | null {
+  if (body && typeof body === 'object' && 'transaction' in body) {
+    const tx = (body as { transaction?: unknown }).transaction;
+    if (tx && typeof tx === 'object') return tx as T & { transaction?: never };
+  }
+  return body;
+}
+
+/** پیام خطای خوانا از بدنهٔ مارکت‌اپ */
+export function maError(body: unknown, fallback: string): string {
+  const d = (body as { detail?: string } | null)?.detail || '';
+  if (!d) return fallback;
+  // خطاهای رایج مارکت‌اپ به فارسی
+  if (/assigned to a user/i.test(d)) return 'این یوزرنیم به یک کانال/ربات تعلق دارد — خرید استارز و پرمیوم فقط به حساب کاربری (اکانت شخصی) امکان‌پذیر است';
+  if (/user not found/i.test(d)) return 'چنین یوزرنیمی در تلگرام وجود ندارد';
+  if (/invalid username/i.test(d)) return 'یوزرنیم نامعتبر است';
+  return d;
+}
+
 export async function maFetch<T>(
   path: string,
   opts: { method?: 'GET' | 'POST'; body?: unknown; query?: Record<string, string | number | undefined | null> } = {},

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { maFetch, isPaidRequired } from '@/lib/marketapp';
+import { maFetch } from '@/lib/marketapp';
 import { fromNano } from '@/lib/format';
 import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
@@ -49,25 +49,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path: stri
     body: maBody,
   });
 
-  const b = r.body as { detail?: string } | null;
-
   // خطاها شفاف برمی‌گردند
-  if (r.status !== 200) {
-    const paid = isPaidRequired(r.status, r.body);
-    return Response.json(
-      { ok: false, detail: paid ? 'این بخش در مارکت‌اپ نیاز به پلن پولی API دارد' : b?.detail || 'خطا در سرویس فرگمنت' },
-      { status: r.status === 0 ? 502 : r.status },
-    );
+  if (r.status !== 200 || !(r.body as SendTx)?.messages) {
+    const b = r.body as { detail?: string } | null;
+    return Response.json({ ok: false, detail: b?.detail || 'خطا در سرویس فرگمنت' }, { status: r.status === 0 ? 502 : r.status });
   }
+
+  const tx = r.body as SendTx;
 
   if (!isBuy) {
     // price/recipient — پاس مستقیم
     return Response.json(r.body);
-  }
-
-  const tx = r.body as SendTx;
-  if (!tx?.messages?.length) {
-    return Response.json({ ok: false, detail: b?.detail || 'پاسخ تراکنش از فرگمنت نامعتبر است' }, { status: 502 });
   }
 
   // ثبت سفارش + کارمزد شفاف

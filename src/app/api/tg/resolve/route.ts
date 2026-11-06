@@ -1,18 +1,27 @@
 import { NextRequest } from 'next/server';
-import { fetchTelegramPage } from '@/lib/tgpage';
+import { resolveRecipient } from '@/lib/recipient';
 
-/** resolve یوزرنیم تلگرام (نام + عکس واقعی از t.me) — بدون نیاز به هیچ توکنی */
+/**
+ * resolve یوزرنیم تلگرام برای گیرندهٔ استارز/پرمیوم:
+ *  - منبع اصلی: API مارکت‌اپ (همان منبعی که خرید واقعی انجام می‌شود) — نام و عکس واقعی
+ *  - فال‌بک: t.me — با هشدار شفاف اگر API یوزرنیم را اکانت شخصی نشناسد
+ */
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
-  const u = String(body.username || '')
-    .replace(/^https?:\/\/(www\.)?t\.me\//i, '')
-    .replace(/^@/, '')
-    .trim()
-    .replace(/[^A-Za-z0-9_]/g, '');
-  if (u.length < 3) return Response.json({ ok: false, detail: 'یوزرنیم حداقل ۳ حرف است' }, { status: 400 });
-  const info = await fetchTelegramPage(u);
-  if (!info.exists) {
-    return Response.json({ ok: false, detail: 'این یوزرنیم در تلگرام پیدا نشد' }, { status: 404 });
+  const kind = body.kind === 'stars' ? 'stars' : 'premium';
+  const info = await resolveRecipient(String(body.username || ''), kind);
+  if (!info.ok) {
+    return Response.json({ ok: false, detail: info.detail }, { status: 404 });
   }
-  return Response.json({ ok: true, username: u, name: info.title, photo: info.image, members: info.members, link: info.link });
+  return Response.json({
+    ok: true,
+    username: info.username,
+    name: info.name,
+    photo: info.photo,
+    members: info.members,
+    verified: info.verified,
+    warning: info.warning || null,
+    note: info.note || null,
+    link: `https://t.me/${info.username}`,
+  });
 }

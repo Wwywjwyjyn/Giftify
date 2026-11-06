@@ -29,6 +29,7 @@ export function Footer() {
           >
             @ItsBenyaminM
           </a>
+          <span className="text-[10px] opacity-60" dir="ltr">· Giftify v3.1.0</span>
         </div>
       </div>
     </footer>

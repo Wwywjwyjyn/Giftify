@@ -4,6 +4,8 @@ import { db } from '@/lib/db';
 import { getSettings, saveSettings } from '@/lib/settings';
 import { creditBalance } from '@/lib/wallet';
 import { safeDetail } from '@/lib/errors';
+import { validateUpdateFile, applyUpdateFile, type UpdateFile } from '@/lib/updates';
+import { APP_VERSION, MIN_CODE_VERSION } from '@/lib/version';
 
 /** مسیرهای مدیریت: settings | orders | fees | users | listings */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
@@ -44,6 +46,24 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
     if (op === 'listings') {
       const listings = await db.localListing.findMany({ orderBy: { createdAt: 'desc' }, take: 200 });
       return Response.json({ listings });
+    }
+
+    // مرکز بروزرسانی — نسخهٔ فعلی کد + تاریخچهٔ همهٔ فایل‌های اعمال‌شده
+    if (op === 'updates') {
+      const rows = await db.siteUpdate.findMany({ orderBy: [{ appliedAt: 'desc' }], take: 100 });
+      return Response.json({
+        code_version: APP_VERSION,
+        min_code_version: MIN_CODE_VERSION,
+        updates: rows.map((u) => ({
+          id: u.id,
+          version: u.version,
+          title: u.title,
+          changes: JSON.parse(u.changes || '[]') as { type: string; text: string }[],
+          fileName: u.fileName,
+          appliedSettings: u.appliedSettings,
+          appliedAt: u.appliedAt,
+        })),
+      });
     }
 
     return Response.json({ detail: 'نامشخص' }, { status: 404 });
@@ -114,9 +134,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path: stri
         await db.order.update({ where: { id }, data: { status: act === 'deliver' ? 'DELIVERED' : 'DONE' } });
         return Response.json({ ok: true });
       }
-      if ((act === 'refund' || act === 'fail') && ['REFUNDED', 'FAILED', 'DONE'].includes(order.status)) {
-        return Response.json({ detail: 'این سفارش قبلاً نهایی شده است' }, { status: 400 });
-      }
       if (act === 'refund') {
         // بازگشت کامل مبلغ به کیف پول داخلی خریدار (سفارش‌های پرداخت‌شده)
         if (order.payMethod === 'wallet' && order.userId) {
@@ -146,6 +163,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path: stri
       const bal = await creditBalance(userId, amount, 'DEPOSIT', { note: String(body.note || 'شارژ دستی توسط پشتیبانی') });
       return Response.json({ ok: bal >= 0, balanceTon: bal });
     }
+
+    // مرکز بروزرسانی — اعمال فایل به‌روزرسانی (محتوای JSON فایل در body.file گذاشته می‌شود)
+    if (op === 'updates') {
+      const raw = body.file ?? body;
+      const v = validateUpdateFile(raw);
+      if (!v.ok) return Response.json({ ok: false, detail: v.detail }, { status: 400 });
+      const result = await applyUpdateFile(v.data as UpdateFile, String(body.file_name || '') || undefined);
+      if (!result.ok) return Response.json({ ok: false, detail: result.detail }, { status: 400 });
+      return Response.json({ ...result, ok: true });
+    }
+
     return Response.json({ detail: 'نامشخص' }, { status: 404 });
   } catch (e) {
     return Response.json({ detail: (e as Error).message }, { status: 500 });

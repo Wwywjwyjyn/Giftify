@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Shield, Save, CheckCircle2, Wallet2, PackageCheck, RotateCcw, XCircle } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Shield, Save, CheckCircle2, Wallet2, PackageCheck, RotateCcw, XCircle, RefreshCw, Upload, History, Bug, Sparkles, Wrench, Lock, FileJson } from 'lucide-react';
 import { faNum, fmtTon } from '@/lib/format';
 import { TonDiamond } from '@/components/ui-bits';
 
@@ -28,6 +28,9 @@ type FeeRow = { id: string; section: string; amountTon: number; wallet: string; 
 type User = { id: number; role: string; wallet?: string; telegramId?: string; name?: string; balanceTon?: number; createdAt: string };
 type Listing = { id: string; kind: string; name: string; priceTon?: number | null; rentPerDayTon?: number | null; status: string; ownerWallet: string; nftAddress?: string | null };
 type Health = { token_set?: boolean; token_valid?: boolean; sale_feed?: boolean; telegram?: boolean };
+type UpdateChange = { type: string; text: string };
+type UpdateRow = { id: string; version: string; title: string; changes: UpdateChange[]; fileName?: string | null; appliedSettings: boolean; appliedAt: string };
+type UpdatesInfo = { code_version: string; min_code_version: string; updates: UpdateRow[] };
 
 const SECTIONS: { key: keyof Settings; label: string }[] = [
   { key: 'fee_usernames', label: 'یوزرنیم‌ها' },
@@ -46,8 +49,16 @@ const STATUS_FA: Record<string, string> = {
   RENT_ACTIVE: 'اجاره فعال', RENT_OVERDUE: 'اجاره معوق', CANCELLED: 'لغو شد',
 };
 
+const CHANGE_META: Record<string, { label: string; cls: string; Icon: typeof Bug }> = {
+  fix: { label: 'رفع باگ', cls: 'text-bad bg-bad/10 border-bad/30', Icon: Bug },
+  feature: { label: 'قابلیت جدید', cls: 'text-ok bg-ok/10 border-ok/30', Icon: Sparkles },
+  improvement: { label: 'بهبود', cls: 'text-accent-hi bg-accent/10 border-accent/30', Icon: Wrench },
+  security: { label: 'امنیت', cls: 'text-[#FBBF24] bg-[#FBBF24]/10 border-[#FBBF24]/30', Icon: Lock },
+  other: { label: 'تغییر', cls: 'text-muted bg-panel2 border-line', Icon: FileJson },
+};
+
 export function AdminInner() {
-  const [tab, setTab] = useState<'fees' | 'orders' | 'users' | 'listings'>('fees');
+  const [tab, setTab] = useState<'fees' | 'orders' | 'users' | 'listings' | 'updates'>('fees');
   const [s, setS] = useState<Settings | null>(null);
   const [saved, setSaved] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -57,6 +68,10 @@ export function AdminInner() {
   const [health, setHealth] = useState<Health>({});
   const [denied, setDenied] = useState(false);
   const [nf, setNf] = useState({ name: '', kind: 'gift', price: '', rent: '', min: '1', max: '30', nft: '', owner: '' });
+  const [updatesInfo, setUpdatesInfo] = useState<UpdatesInfo | null>(null);
+  const [updateMsg, setUpdateMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [applying, setApplying] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const loadAll = useCallback(async () => {
     const sr = await fetch('/api/admin/settings', { cache: 'no-store' });
@@ -66,6 +81,7 @@ export function AdminInner() {
     fetch('/api/admin/users', { cache: 'no-store' }).then((r) => r.json()).then((j) => setUsers(j.users || [])).catch(() => {});
     fetch('/api/admin/listings', { cache: 'no-store' }).then((r) => r.json()).then((j) => setListings(j.listings || [])).catch(() => {});
     fetch('/api/health', { cache: 'no-store' }).then((r) => r.json()).then((j) => setHealth(j)).catch(() => {});
+    fetch('/api/admin/updates', { cache: 'no-store' }).then((r) => r.json()).then((j) => setUpdatesInfo(j)).catch(() => {});
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
@@ -124,6 +140,36 @@ export function AdminInner() {
     setListings((l) => l.filter((x) => x.id !== id));
   }
 
+  async function applyUpdateFile(f: File) {
+    setApplying(true);
+    setUpdateMsg(null);
+    try {
+      const text = await f.text();
+      let json: unknown;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        setUpdateMsg({ ok: false, text: 'فایل JSON معتبر نیست — فایل به‌روزرسانی را دست‌نخورده بارگذاری کنید' });
+        return;
+      }
+      const r = await fetch('/api/admin/updates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: json, file_name: f.name }),
+      });
+      const j = await r.json();
+      if (j.ok) {
+        setUpdateMsg({ ok: true, text: `به‌روزرسانی ${j.version} اعمال شد ✓${j.appliedSettings ? ' — تنظیمات جدید فعال شد' : ''}` });
+        fetch('/api/admin/updates', { cache: 'no-store' }).then((res) => res.json()).then((x) => setUpdatesInfo(x)).catch(() => {});
+      } else {
+        setUpdateMsg({ ok: false, text: j.detail || 'اعمال به‌روزرسانی ممکن نشد' });
+      }
+    } finally {
+      setApplying(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
   if (denied) {
     return (
       <div className="card mx-auto mt-12 max-w-md p-8 text-center text-sm leading-7">
@@ -163,7 +209,7 @@ export function AdminInner() {
 
       {/* تب‌ها */}
       <div className="mt-6 flex gap-6 overflow-x-auto border-b border-line">
-        {([['fees', 'تنظیمات'], ['orders', 'سفارش‌ها'], ['users', 'کاربران'], ['listings', 'لیستینگ محلی']] as const).map(([k, l]) => (
+        {([['fees', 'تنظیمات'], ['orders', 'سفارش‌ها'], ['users', 'کاربران'], ['listings', 'لیستینگ محلی'], ['updates', 'بروزرسانی']] as const).map(([k, l]) => (
           <button key={k} className={`tab whitespace-nowrap ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -405,6 +451,101 @@ export function AdminInner() {
               </table>
             </div>
             {listings.length === 0 && <div className="py-8 text-center text-xs text-muted">لیستینگی نیست</div>}
+          </div>
+        </div>
+      )}
+
+      {tab === 'updates' && (
+        <div className="mt-6 max-w-2xl space-y-5">
+          {/* نسخه فعلی */}
+          <div className="card flex flex-wrap items-center justify-between gap-3 p-5">
+            <div>
+              <div className="text-sm font-bold">نسخهٔ فعلی گیفتیفای</div>
+              <div className="mt-1 text-xs text-muted">
+                کد نصب‌شده روی هاست: <span className="font-bold text-ink" dir="ltr">v{updatesInfo?.code_version || '…'}</span>
+                {updatesInfo && updatesInfo.updates.length > 0 && (
+                  <span> — آخرین به‌روزرسانی اعمال‌شده: <span className="font-bold text-accent-hi" dir="ltr">v{updatesInfo.updates[0].version}</span></span>
+                )}
+              </div>
+            </div>
+            <button className="btn-ghost btn-sm" onClick={() => fetch('/api/admin/updates', { cache: 'no-store' }).then((r) => r.json()).then(setUpdatesInfo).catch(() => {})}>
+              <RefreshCw size={13} /> بروزرسانی فهرست
+            </button>
+          </div>
+
+          {/* بارگذاری فایل */}
+          <div className="card p-5">
+            <div className="flex items-center gap-2 text-sm font-bold">
+              <Upload size={15} className="text-accent-hi" /> بارگذاری فایل به‌روزرسانی
+            </div>
+            <p className="mt-2 text-xs leading-6 text-muted">
+              فایل <span dir="ltr" className="font-bold">giftify-update-…json</span> که برایتان ارسال می‌شود را اینجا انتخاب کنید؛ تغییرات تنظیمات (کارمزد، قیمت، اعلان و…) فوراً اعمال و در تاریخچهٔ پایین ثبت می‌شود.
+              برای تغییرات کد، ابتدا ZIP جدید را روی هاست جایگزین کنید — خود فایل، تاریخچهٔ تغییرات را ثبت می‌کند.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="application/json,.json"
+                className="input max-w-xs cursor-pointer py-2 text-xs"
+                disabled={applying}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) applyUpdateFile(f);
+                }}
+              />
+              {applying && <span className="spin" />}
+            </div>
+            {updateMsg && (
+              <div className={`mt-3 rounded-lg border px-4 py-2.5 text-xs leading-6 ${updateMsg.ok ? 'border-ok/30 bg-ok/10 text-ok' : 'border-bad/30 bg-bad/10 text-bad'}`}>
+                {updateMsg.text}
+              </div>
+            )}
+          </div>
+
+          {/* تاریخچه */}
+          <div>
+            <h2 className="section-title mb-3 flex items-center gap-2">
+              <History size={15} /> تاریخچهٔ به‌روزرسانی‌ها
+            </h2>
+            {updatesInfo && updatesInfo.updates.length === 0 && (
+              <div className="card p-6 text-center text-xs leading-6 text-muted">
+                هنوز فایلی اعمال نشده. اولین فایل به‌روزرسانی (مثل <span dir="ltr">giftify-update-v3.1.0.json</span> همراه بستهٔ نصب) را بارگذاری کنید.
+              </div>
+            )}
+            <div className="space-y-3">
+              {updatesInfo?.updates.map((u) => (
+                <div key={u.id} className="card p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-md border border-accent/40 bg-accent/10 px-2 py-0.5 text-xs font-bold text-accent-hi" dir="ltr">v{u.version}</span>
+                      <span className="text-sm font-bold">{u.title}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-muted">
+                      {u.appliedSettings && <span className="pill bg-ok/15 text-ok">تنظیمات اعمال شد</span>}
+                      {u.fileName && <span dir="ltr" className="max-w-[180px] truncate">{u.fileName}</span>}
+                      <span>{new Date(u.appliedAt).toLocaleString('fa-IR')}</span>
+                    </div>
+                  </div>
+                  {u.changes.length > 0 && (
+                    <ul className="mt-3 space-y-1.5">
+                      {u.changes.map((c, i) => {
+                        const meta = CHANGE_META[c.type] || CHANGE_META.other;
+                        const Icon = meta.Icon;
+                        return (
+                          <li key={i} className="flex items-start gap-2 text-xs leading-6">
+                            <span className={`mt-0.5 inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-bold ${meta.cls}`}>
+                              <Icon size={10} /> {meta.label}
+                            </span>
+                            <span className="text-muted">{c.text}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

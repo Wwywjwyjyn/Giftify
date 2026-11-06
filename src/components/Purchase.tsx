@@ -30,12 +30,12 @@ export function PaymentMethod({ value, onChange }: { value: PayCurrency; onChang
 }
 
 /**
- * جستجوی گیرنده (یوزرنیم) با نمایش نام و عکس واقعی — از t.me بدون نیاز به هیچ توکنی.
+ * جستجوی گیرنده (یوزرنیم) با نمایش نام و عکس واقعی — منبع رسمی API مارکت‌اپ + فال‌بک t.me.
  * endpoint باید /api/tg/resolve باشد.
  */
 export function RecipientSearch({ endpoint, label, onFound }: { endpoint: string; label: string; onFound?: (username: string) => void }) {
   const [username, setUsername] = useState('');
-  const [info, setInfo] = useState<{ photo?: string; name?: string } | null>(null);
+  const [info, setInfo] = useState<{ photo?: string; name?: string; verified?: boolean; warning?: string | null; members?: string } | null>(null);
   const [err, setErr] = useState('');
   const [checking, setChecking] = useState(false);
   const foundRef = useRef(onFound);
@@ -58,7 +58,7 @@ export function RecipientSearch({ endpoint, label, onFound }: { endpoint: string
         .then((r) => r.json())
         .then((j) => {
           if (j.ok && (j.photo || j.name)) {
-            setInfo({ photo: j.photo, name: j.name });
+            setInfo({ photo: j.photo, name: j.name, verified: j.verified, warning: j.warning, members: j.members });
             setErr('');
             foundRef.current?.(u);
           } else if (j.photo || j.name) {
@@ -91,15 +91,23 @@ export function RecipientSearch({ endpoint, label, onFound }: { endpoint: string
         {checking && <span className="spin absolute end-4 top-1/2 -translate-y-1/2" />}
       </div>
       {info && (
-        <div className="mt-2 flex items-center gap-3 rounded-lg border border-ok/30 bg-ok/10 px-3 py-2">
-          {info.photo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={info.photo} alt="" className="h-9 w-9 rounded-full" referrerPolicy="no-referrer" />
-          ) : (
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-panel2 text-sm font-bold">{(info.name || '?').slice(0, 1)}</div>
-          )}
-          <div className="text-sm font-bold text-ok">{info.name}</div>
-          <div className="text-xs text-muted" dir="ltr">@{username.replace(/^@/, '')}</div>
+        <div className={`mt-2 rounded-lg border px-3 py-2 ${info.verified ? 'border-ok/30 bg-ok/10' : 'border-[#F59E0B]/30 bg-[#F59E0B]/10'}`}>
+          <div className="flex items-center gap-3">
+            {info.photo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={info.photo} alt="" className="h-9 w-9 rounded-full" referrerPolicy="no-referrer" />
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-panel2 text-sm font-bold">{(info.name || '?').slice(0, 1)}</div>
+            )}
+            <div className={`text-sm font-bold ${info.verified ? 'text-ok' : 'text-ink'}`}>{info.name}</div>
+            <div className="text-xs text-muted" dir="ltr">@{username.replace(/^@/, '')}</div>
+            {info.verified ? (
+              <span className="ms-auto text-[10px] font-bold text-ok">تأیید رسمی ✓</span>
+            ) : (
+              <span className="ms-auto text-[10px] text-muted">یافت شد</span>
+            )}
+          </div>
+          {info.warning && <div className="mt-2 text-[11px] leading-5 text-[#FBBF24]">{info.warning}</div>}
         </div>
       )}
       {err && <div className="mt-2 rounded-lg border border-bad/30 bg-bad/10 px-3 py-2 text-xs text-bad">{err}</div>}

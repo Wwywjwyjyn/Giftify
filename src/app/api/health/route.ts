@@ -1,5 +1,6 @@
 import { env } from '@/lib/env';
 import { maFetch } from '@/lib/marketapp';
+import { APP_VERSION } from '@/lib/version';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,7 @@ export async function GET() {
   }
   return Response.json({
     ok: true,
+    version: APP_VERSION,
     token_set: tokenSet,
     token_valid: tokenValid,
     sale_feed: saleFeed,

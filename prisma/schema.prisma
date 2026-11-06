@@ -128,3 +128,18 @@ model WalletTx {
   meta         String   @default("{}")
   createdAt    DateTime @default(now())
 }
+
+/**
+ * مرکز بروزرسانی — هر فایل به‌روزرسانی که ادمین در پنل بارگذاری می‌کند
+ * یک ردیف اینجا ثبت می‌شود: نسخه، عنوان، لیست تغییرات (fix/feature/…)، زمان اعمال.
+ * اگر فایل شامل تنظیمات (کارمزد/قیمت/اعلان) باشد همان لحظه اعمال می‌شود.
+ */
+model SiteUpdate {
+  id        String   @id @default(cuid())
+  version   String   @unique // semver مثل 3.1.0
+  title     String
+  changes   String   @default("[]") // JSON: [{type: fix|feature|improvement|security, text}]
+  fileName  String?
+  appliedSettings Boolean @default(false)
+  appliedAt DateTime @default(now())
+}
